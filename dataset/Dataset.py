@@ -9,8 +9,6 @@ import einops
 import numpy as np
 import numpy.ma as ma
 import pandas as pd
-import richdem as rd
-import rioxarray as rio
 import torch
 import torchvision
 from torchio.transforms import RescaleIntensity
