@@ -411,7 +411,7 @@ def eval_contrastive_semantic_segmentation(
                 mask = mask.to(configs["device"])
 
                 pre_event_1 = pre_event_1.to(configs["device"])
-                pre_event2 = pre_event2.to(configs["device"])
+                pre_event_2 = pre_event_2.to(configs["device"])
                 output = model(pre_event_1, pre_event_2,
                                post_event, eval_mode=True)
 
