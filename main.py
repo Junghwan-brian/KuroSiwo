@@ -6,7 +6,6 @@ from pathlib import Path
 
 import numpy as np
 import torch
-import wandb
 from models.model_utilities import *
 from torchmetrics import Accuracy, F1Score, Precision, Recall
 
@@ -24,10 +23,13 @@ from training.recurrent_trainer import (
     train_recurrent_segmentation
 )
 from utilities.utilities import *
-
+from warnings import filterwarnings
+filterwarnings("ignore")
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--method", default=None)
+parser.add_argument("--task", default=None)
+parser.add_argument("--gpu", type=int, default=None)
 parser.add_argument("--backbone", default=None)
 parser.add_argument("--dem", type=int, default=None)
 parser.add_argument("--slope", type=int, default=None)
@@ -46,12 +48,18 @@ torch.manual_seed(args.seed)
 
 if __name__ == "__main__":
     configs = json.load(open("configs/config.json", "r"))
+    if args.gpu is not None:
+        configs["gpu"] = int(args.gpu)
+    if args.task is not None:
+        configs["task"] = args.task
     if args.method is not None:
         configs["method"] = args.method
     if configs["method"] == "convlstm":
-        model_configs = json.load(open("configs/method/temporal/convlstm.json", "r"))
+        model_configs = json.load(
+            open("configs/method/temporal/convlstm.json", "r"))
     elif configs["method"] == "vivit":
-        model_configs = json.load(open("configs/method/temporal/vivit.json", "r"))
+        model_configs = json.load(
+            open("configs/method/temporal/vivit.json", "r"))
     else:
         model_configs = json.load(
             open(
@@ -96,8 +104,9 @@ if __name__ == "__main__":
 
             # Evaluate on Test Set
             model = initialize_recurrent_model(configs, model_configs)
-
-            ckpt_path = Path(configs["checkpoint_path"]) / f'{rep_i}' / "best_segmentation.pt"
+            rep_i = '0'  # NOTE 임시로 정해놓음.
+            ckpt_path = Path(configs["checkpoint_path"]
+                             ) / "best_segmentation.pt"
 
             print(f"Loading model from: {ckpt_path}")
             checkpoint = torch.load(ckpt_path, map_location=configs['device'])
@@ -126,29 +135,14 @@ if __name__ == "__main__":
                     configs=configs,
                     model_configs=model_configs,
                 )
-            else:
-                if configs["wandb_activate"]:
-                    # Store wandb id to continue run
-
-                    id = wandb.util.generate_id()
-                    json.dump(
-                        {"run_id": id}, open(configs["checkpoint_path"] + "/id.json", "w")
-                    )
-                    wandb.init(
-                        project=configs["wandb_project"],
-                        entity=configs["wandb_entity"],
-                        config=configs,
-                        id=id,
-                        resume="allow",
-                    )
-                    wandb.watch(model, log_freq=20)
 
             # Evaluate on Test Set
             print(
                 "Loading model from: ",
                 configs["checkpoint_path"] + "/" + "best_segmentation.pt",
             )
-            model = torch.load(configs["checkpoint_path"] + "/" + "best_segmentation.pt")
+            model = torch.load(
+                configs["checkpoint_path"] + "/" + "best_segmentation.pt")
             test_acc, test_score, miou = eval_semantic_segmentation(
                 model,
                 test_loader,

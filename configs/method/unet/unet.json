@@ -5,7 +5,7 @@
     "weight_decay": 0.0,
     "lr_schedule": "cosine",
     "architecture": "UNet",
-    "backbone": "resnet18",
-    "pretrained": true,
-    "encoder_weights": "imagenet"
+    "backbone": "resnet34",
+    "pretrained": false,
+    "encoder_weights": null // imagenet
 }

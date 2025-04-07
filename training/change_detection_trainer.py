@@ -2,7 +2,6 @@ import torch
 from tqdm import tqdm
 from pathlib import Path
 import json
-import wandb
 import kornia
 
 import torch.nn.functional as F
@@ -11,29 +10,21 @@ from utilities.utilities import *
 from models.model_utilities import *
 
 
-CLASS_LABELS = {0: 'No water', 1: 'Permanent Waters', 2: 'Floods', 3: 'Invalid pixels'}
+CLASS_LABELS = {0: 'No water', 1: 'Permanent Waters',
+                2: 'Floods', 3: 'Invalid pixels'}
 
 
 def train_change_detection(model, train_loader, val_loader, test_loader, configs, model_configs):
     assert len(configs['inputs']) == 2, \
-        print(f'Model {model_configs["method"]} requires exactly 2 input images.')
-
-    if configs['wandb_activate']:
-        if configs['resume_wandb']:
-            id = json.load(open(f'{configs["checkpoint_path"]}/id.json', 'r'))['run_id']
-        else:
-            # Store wandb id to continue run
-            id = wandb.util.generate_id()
-            json.dump({'run_id': id}, open(configs['checkpoint_path'] + '/id.json', 'w'))
-
-        wandb.init(project=configs['wandb_project'], entity=configs['wandb_entity'], config=configs, id=id, resume="allow")
-        wandb.watch(model, log_freq=20)
+        print(
+            f'Model {model_configs["method"]} requires exactly 2 input images.')
 
     # Initialize metrics
     accuracy, fscore, precision, recall, iou = initialize_metrics(configs)
 
     if configs['log_AOI_metrics']:
-        activ_metrics = {activ: initialize_metrics(configs, mode='val') for activ in train_loader.dataset.activations}
+        activ_metrics = {activ: initialize_metrics(
+            configs, mode='val') for activ in train_loader.dataset.activations}
 
     model.to(configs['device'])
 
@@ -50,7 +41,8 @@ def train_change_detection(model, train_loader, val_loader, test_loader, configs
     else:
         if model_configs['optimizer'] == 'adam':
             # Initialize optimizer
-            optimizer = torch.optim.Adam(model.parameters(), lr=model_configs['learning_rate'])
+            optimizer = torch.optim.Adam(
+                model.parameters(), lr=model_configs['learning_rate'])
         elif model_configs['optimizer'] == 'adamw':
             optimizer = torch.optim.AdamW(
                 model.parameters(),
@@ -65,7 +57,8 @@ def train_change_detection(model, train_loader, val_loader, test_loader, configs
                 weight_decay=model_configs['weight_decay'])
 
     # Initialize lr scheduler
-    lr_scheduler = init_lr_scheduler(optimizer, configs, model_configs, steps=len(train_loader))
+    lr_scheduler = init_lr_scheduler(
+        optimizer, configs, model_configs, steps=len(train_loader))
 
     start_epoch = 0
     last_epoch = configs['epochs']
@@ -78,8 +71,6 @@ def train_change_detection(model, train_loader, val_loader, test_loader, configs
     if configs['mixed_precision']:
         # Creates a GradScaler once at the beginning of training.
         scaler = torch.cuda.amp.GradScaler()
-
-    total_iters = 0
 
     print(f'===== checkpoint_path: {configs["checkpoint_path"]} ====')
 
@@ -94,10 +85,10 @@ def train_change_detection(model, train_loader, val_loader, test_loader, configs
                 if configs['scale_input'] is not None:
                     if configs['dem']:
                         post_scale_var_1, post_scale_var_2, post_event, mask, pre1_scale_var_1, \
-                        pre1_scale_var_2, pre_event_1, pre2_scale_var_1, pre2_scale_var_2, pre_event_2, dem, clz, activ = batch
+                            pre1_scale_var_2, pre_event_1, pre2_scale_var_1, pre2_scale_var_2, pre_event_2, dem, clz, activ = batch
                     else:
                         post_scale_var_1, post_scale_var_2, post_event, mask, pre1_scale_var_1, \
-                        pre1_scale_var_2, pre_event_1, pre2_scale_var_1, pre2_scale_var_2, pre_event_2, clz, activ = batch
+                            pre1_scale_var_2, pre_event_1, pre2_scale_var_1, pre2_scale_var_2, pre_event_2, clz, activ = batch
                 else:
                     if configs['dem']:
                         post_event, mask, pre_event_1, pre_event_2, dem, clz, activ = batch
@@ -117,17 +108,20 @@ def train_change_detection(model, train_loader, val_loader, test_loader, configs
                     for inp in configs['inputs']:
                         if inp == 'pre_event_1':
                             if configs['dem']:
-                                inputs.append(torch.cat((pre_event_1, dem), dim=1))
+                                inputs.append(
+                                    torch.cat((pre_event_1, dem), dim=1))
                             else:
                                 inputs.append(pre_event_1)
                         elif inp == 'pre_event_2':
                             if configs['dem']:
-                                inputs.append(torch.cat((pre_event_2, dem), dim=1))
+                                inputs.append(
+                                    torch.cat((pre_event_2, dem), dim=1))
                             else:
                                 inputs.append(pre_event_2)
                         elif inp == 'post_event':
                             if configs['dem']:
-                                inputs.append(torch.cat((post_event, dem), dim=1))
+                                inputs.append(
+                                    torch.cat((post_event, dem), dim=1))
                             else:
                                 inputs.append(post_event)
 
@@ -136,10 +130,13 @@ def train_change_detection(model, train_loader, val_loader, test_loader, configs
 
                     if configs['method'] == 'changeformer':
                         if model_configs['multi_scale_infer']:
-                            final_output = torch.zeros(output[-1].size()).to(configs['device'])
+                            final_output = torch.zeros(
+                                output[-1].size()).to(configs['device'])
                             for pred in output:
                                 if pred.size(2) != output[-1].size(2):
-                                    final_output = final_output + F.interpolate(pred, size=output[-1].size(2), mode="nearest")
+                                    final_output = final_output + \
+                                        F.interpolate(
+                                            pred, size=output[-1].size(2), mode="nearest")
                                 else:
                                     final_output = final_output + pred
                             final_output = final_output / len(output)
@@ -156,10 +153,13 @@ def train_change_detection(model, train_loader, val_loader, test_loader, configs
                             temp_loss = 0.0
                             for pred in output:
                                 if pred.size(2) != mask.size(2):
-                                    temp_loss = temp_loss + model_configs['multi_pred_weights'][i] * criterion(pred, F.interpolate(mask, size=pred.size(2), mode="nearest"))
+                                    temp_loss = temp_loss + model_configs['multi_pred_weights'][i] * criterion(
+                                        pred, F.interpolate(mask, size=pred.size(2), mode="nearest"))
                                 else:
-                                    temp_loss = temp_loss + model_configs['multi_pred_weights'][i] * criterion(pred, mask)
-                                i+=1
+                                    temp_loss = temp_loss + \
+                                        model_configs['multi_pred_weights'][i] * \
+                                        criterion(pred, mask)
+                                i += 1
                             loss = temp_loss
                         else:
                             loss = criterion(output[-1], mask)
@@ -191,14 +191,20 @@ def train_change_detection(model, train_loader, val_loader, test_loader, configs
                     activs_in_batch = torch.unique(activ)
 
                     for activ_i in [i.item() for i in activs_in_batch]:
-                        activ_metrics[activ_i][0](predictions[activ==activ_i, :, :], mask[activ==activ_i, :, :]) # accuracy
-                        activ_metrics[activ_i][1](predictions[activ==activ_i, :, :], mask[activ==activ_i, :, :]) # fscore
-                        activ_metrics[activ_i][2](predictions[activ==activ_i, :, :], mask[activ==activ_i, :, :]) # precision
-                        activ_metrics[activ_i][3](predictions[activ==activ_i, :, :], mask[activ==activ_i, :, :]) # recall
-                        activ_metrics[activ_i][4](predictions[activ==activ_i, :, :], mask[activ==activ_i, :, :]) # iou
+                        activ_metrics[activ_i][0](
+                            predictions[activ == activ_i, :, :], mask[activ == activ_i, :, :])  # accuracy
+                        activ_metrics[activ_i][1](
+                            predictions[activ == activ_i, :, :], mask[activ == activ_i, :, :])  # fscore
+                        activ_metrics[activ_i][2](
+                            predictions[activ == activ_i, :, :], mask[activ == activ_i, :, :])  # precision
+                        activ_metrics[activ_i][3](
+                            predictions[activ == activ_i, :, :], mask[activ == activ_i, :, :])  # recall
+                        activ_metrics[activ_i][4](
+                            predictions[activ == activ_i, :, :], mask[activ == activ_i, :, :])  # iou
 
                 if index % configs['print_frequency'] == 0:
-                    pbar.set_description(f'({epoch}) Train Loss: {train_loss:.4f}')
+                    pbar.set_description(
+                        f'({epoch}) Train Loss: {train_loss:.4f}')
 
                 pbar.update(1)
 
@@ -209,7 +215,7 @@ def train_change_detection(model, train_loader, val_loader, test_loader, configs
                 'optimizer_state_dict': optimizer.state_dict(),
                 'lr_scheduler_state_dict': lr_scheduler.state_dict(),
                 'loss': loss_val
-                }, Path(configs['checkpoint_path']) / f'checkpoint_epoch={epoch}.pt')
+            }, Path(configs['checkpoint_path']) / f'checkpoint_epoch={epoch}.pt')
 
         total_train_accuracy = accuracy.compute()
         total_train_fscore = fscore.compute()
@@ -221,21 +227,36 @@ def train_change_detection(model, train_loader, val_loader, test_loader, configs
             print(f'Epoch: {epoch}')
             print(f'Iteration: {index}')
             print(f'Train Loss: {loss_val}')
-            print(f'Train Accuracy ({CLASS_LABELS[0]}): {100 * total_train_accuracy[0].item()}')
-            print(f'Train Accuracy ({CLASS_LABELS[1]}): {100 * total_train_accuracy[1].item()}')
-            print(f'Train Accuracy ({CLASS_LABELS[2]}): {100 * total_train_accuracy[2].item()}')
-            print(f'Train F-Score ({CLASS_LABELS[0]}): {100 * total_train_fscore[0].item()}')
-            print(f'Train F-Score ({CLASS_LABELS[1]}): {100 * total_train_fscore[1].item()}')
-            print(f'Train F-Score ({CLASS_LABELS[2]}): {100 * total_train_fscore[2].item()}')
-            print(f'Train Precision ({CLASS_LABELS[0]}): {100 * total_train_prec[0].item()}')
-            print(f'Train Precision ({CLASS_LABELS[1]}): {100 * total_train_prec[1].item()}')
-            print(f'Train Precision ({CLASS_LABELS[2]}): {100 * total_train_prec[2].item()}')
-            print(f'Train Recall ({CLASS_LABELS[0]}): {100 * total_train_rec[0].item()}')
-            print(f'Train Recall ({CLASS_LABELS[1]}): {100 * total_train_rec[1].item()}')
-            print(f'Train Recall ({CLASS_LABELS[2]}): {100 * total_train_rec[2].item()}')
-            print(f'Train IoU ({CLASS_LABELS[0]}): {100 * total_train_iou[0].item()}')
-            print(f'Train IoU ({CLASS_LABELS[1]}): {100 * total_train_iou[1].item()}')
-            print(f'Train IoU ({CLASS_LABELS[2]}): {100 * total_train_iou[2].item()}')
+            print(
+                f'Train Accuracy ({CLASS_LABELS[0]}): {100 * total_train_accuracy[0].item()}')
+            print(
+                f'Train Accuracy ({CLASS_LABELS[1]}): {100 * total_train_accuracy[1].item()}')
+            print(
+                f'Train Accuracy ({CLASS_LABELS[2]}): {100 * total_train_accuracy[2].item()}')
+            print(
+                f'Train F-Score ({CLASS_LABELS[0]}): {100 * total_train_fscore[0].item()}')
+            print(
+                f'Train F-Score ({CLASS_LABELS[1]}): {100 * total_train_fscore[1].item()}')
+            print(
+                f'Train F-Score ({CLASS_LABELS[2]}): {100 * total_train_fscore[2].item()}')
+            print(
+                f'Train Precision ({CLASS_LABELS[0]}): {100 * total_train_prec[0].item()}')
+            print(
+                f'Train Precision ({CLASS_LABELS[1]}): {100 * total_train_prec[1].item()}')
+            print(
+                f'Train Precision ({CLASS_LABELS[2]}): {100 * total_train_prec[2].item()}')
+            print(
+                f'Train Recall ({CLASS_LABELS[0]}): {100 * total_train_rec[0].item()}')
+            print(
+                f'Train Recall ({CLASS_LABELS[1]}): {100 * total_train_rec[1].item()}')
+            print(
+                f'Train Recall ({CLASS_LABELS[2]}): {100 * total_train_rec[2].item()}')
+            print(
+                f'Train IoU ({CLASS_LABELS[0]}): {100 * total_train_iou[0].item()}')
+            print(
+                f'Train IoU ({CLASS_LABELS[1]}): {100 * total_train_iou[1].item()}')
+            print(
+                f'Train IoU ({CLASS_LABELS[2]}): {100 * total_train_iou[2].item()}')
             print(f'Train MeanIoU: {mean_iou * 100}')
             print(f'lr: {lr_scheduler.get_last_lr()[0]}')
 
@@ -267,11 +288,21 @@ def train_change_detection(model, train_loader, val_loader, test_loader, configs
                 activ_i_metrics = {}
                 for activ_i, activ_i_metrics_f in activ_metrics.items():
                     activ_i_metrics[activ_i] = {}
-                    activ_i_metrics[activ_i]['accuracy'] = activ_i_metrics_f[0].compute() # accuracy
-                    activ_i_metrics[activ_i]['fscore'] = activ_i_metrics_f[1].compute() # fscore
-                    activ_i_metrics[activ_i]['precision'] = activ_i_metrics_f[2].compute() # precision
-                    activ_i_metrics[activ_i]['recall'] = activ_i_metrics_f[3].compute() # recall
-                    activ_i_metrics[activ_i]['iou'] = activ_i_metrics_f[4].compute() # iou
+                    # accuracy
+                    activ_i_metrics[activ_i]['accuracy'] = activ_i_metrics_f[0].compute(
+                    )
+                    # fscore
+                    activ_i_metrics[activ_i]['fscore'] = activ_i_metrics_f[1].compute(
+                    )
+                    # precision
+                    activ_i_metrics[activ_i]['precision'] = activ_i_metrics_f[2].compute(
+                    )
+                    # recall
+                    activ_i_metrics[activ_i]['recall'] = activ_i_metrics_f[3].compute(
+                    )
+                    # iou
+                    activ_i_metrics[activ_i]['iou'] = activ_i_metrics_f[4].compute(
+                    )
 
                 for activ_i, activ_i_metrics_list in activ_i_metrics.items():
                     log_dict.update({
@@ -298,12 +329,14 @@ def train_change_detection(model, train_loader, val_loader, test_loader, configs
         # Update LR scheduler
         lr_scheduler.step()
 
-        #Evaluate on validation set
-        val_acc, val_score, miou = eval_change_detection(model, val_loader, settype='Validation', configs=configs, model_configs=model_configs)
+        # Evaluate on validation set
+        val_acc, val_score, miou = eval_change_detection(
+            model, val_loader, settype='Validation', configs=configs, model_configs=model_configs)
 
         if miou > best_val:
             print(f'New best validation mIoU: {miou}')
-            print(f'Saving model to: {configs["checkpoint_path"]}/best_segmentation.pt')
+            print(
+                f'Saving model to: {configs["checkpoint_path"]}/best_segmentation.pt')
             best_val = miou
             best_stats['acc'] = best_val
             best_stats['epoch'] = epoch
@@ -314,7 +347,7 @@ def train_change_detection(model, train_loader, val_loader, test_loader, configs
                 'optimizer_state_dict': optimizer.state_dict(),
                 'lr_scheduler_state_dict': lr_scheduler.state_dict(),
                 'loss': loss_val
-                }, Path(configs['checkpoint_path']) / 'best_segmentation.pt')
+            }, Path(configs['checkpoint_path']) / 'best_segmentation.pt')
 
             with open(Path(configs['checkpoint_path']) / 'best_segmentation.txt', 'w') as f:
                 f.write(f'{epoch}\n')
@@ -322,18 +355,24 @@ def train_change_detection(model, train_loader, val_loader, test_loader, configs
 
 
 def eval_change_detection(model, loader, settype, configs=None, model_configs=None):
-    accuracy, fscore, precision, recall, iou = initialize_metrics(configs, mode='val')
+    accuracy, fscore, precision, recall, iou = initialize_metrics(
+        configs, mode='val')
 
     if configs['evaluate_water']:
-        water_fscore = F1Score(task='multiclass', num_classes=2, average='none', multidim_average='global', ignore_index=3).to(configs['device'])
+        water_fscore = F1Score(task='multiclass', num_classes=2, average='none',
+                               multidim_average='global', ignore_index=3).to(configs['device'])
 
     if configs['log_zone_metrics']:
-        accuracy_clzone1, fscore_clzone1, precision_clzone1, recall_clzone1, iou_clzone1 = initialize_metrics(configs, mode='val')
-        accuracy_clzone2, fscore_clzone2, precision_clzone2, recall_clzone2, iou_clzone2 = initialize_metrics(configs, mode='val')
-        accuracy_clzone3, fscore_clzone3, precision_clzone3, recall_clzone3, iou_clzone3 = initialize_metrics(configs, mode='val')
+        accuracy_clzone1, fscore_clzone1, precision_clzone1, recall_clzone1, iou_clzone1 = initialize_metrics(
+            configs, mode='val')
+        accuracy_clzone2, fscore_clzone2, precision_clzone2, recall_clzone2, iou_clzone2 = initialize_metrics(
+            configs, mode='val')
+        accuracy_clzone3, fscore_clzone3, precision_clzone3, recall_clzone3, iou_clzone3 = initialize_metrics(
+            configs, mode='val')
 
     if configs['log_AOI_metrics']:
-        activ_metrics = {activ: initialize_metrics(configs, mode='val') for activ in loader.dataset.activations}
+        activ_metrics = {activ: initialize_metrics(
+            configs, mode='val') for activ in loader.dataset.activations}
 
     criterion = create_loss(configs, mode='val')
 
@@ -345,7 +384,7 @@ def eval_change_detection(model, loader, settype, configs=None, model_configs=No
 
     samples_per_clzone = {1: 0, 2: 0, 3: 0}
 
-    random_index = 0 #random.randint(0,len(loader)-1)
+    random_index = 0  # random.randint(0,len(loader)-1)
     with tqdm(initial=0, total=len(loader)) as pbar:
         for index, batch in enumerate(loader):
             with torch.cuda.amp.autocast(enabled=False):
@@ -353,10 +392,10 @@ def eval_change_detection(model, loader, settype, configs=None, model_configs=No
                     if configs['scale_input'] is not None:
                         if configs['dem']:
                             post_scale_var_1, post_scale_var_2, post_event, mask, pre1_scale_var_1, \
-                            pre1_scale_var_2, pre_event_1, pre2_scale_var_1, pre2_scale_var_2, pre_event_2, dem, clz, activ = batch
+                                pre1_scale_var_2, pre_event_1, pre2_scale_var_1, pre2_scale_var_2, pre_event_2, dem, clz, activ = batch
                         else:
                             post_scale_var_1, post_scale_var_2, post_event, mask, pre1_scale_var_1, \
-                            pre1_scale_var_2, pre_event_1, pre2_scale_var_1, pre2_scale_var_2, pre_event_2, clz, activ = batch
+                                pre1_scale_var_2, pre_event_1, pre2_scale_var_1, pre2_scale_var_2, pre_event_2, clz, activ = batch
                     else:
                         if configs['dem']:
                             post_event, mask, pre_event_1, pre_event_2, dem, clz, activ = batch
@@ -375,17 +414,20 @@ def eval_change_detection(model, loader, settype, configs=None, model_configs=No
                     for inp in configs['inputs']:
                         if inp == 'pre_event_1':
                             if configs['dem']:
-                                inputs.append(torch.cat((pre_event_1, dem), dim=1))
+                                inputs.append(
+                                    torch.cat((pre_event_1, dem), dim=1))
                             else:
                                 inputs.append(pre_event_1)
                         elif inp == 'pre_event_2':
                             if configs['dem']:
-                                inputs.append(torch.cat((pre_event_2, dem), dim=1))
+                                inputs.append(
+                                    torch.cat((pre_event_2, dem), dim=1))
                             else:
                                 inputs.append(pre_event_2)
                         elif inp == 'post_event':
                             if configs['dem']:
-                                inputs.append(torch.cat((post_event, dem), dim=1))
+                                inputs.append(
+                                    torch.cat((post_event, dem), dim=1))
                             else:
                                 inputs.append(post_event)
 
@@ -418,7 +460,8 @@ def eval_change_detection(model, loader, settype, configs=None, model_configs=No
                         water_fscore(water_only_predictions, water_only_labels)
 
                     if index % configs['print_frequency'] == 0:
-                        pbar.set_description(f'{settype} Loss: {total_loss:.4f}')
+                        pbar.set_description(
+                            f'{settype} Loss: {total_loss:.4f}')
 
                     if index == random_index:
                         post_image_wand = post_event[0].detach().cpu()
@@ -429,46 +472,72 @@ def eval_change_detection(model, loader, settype, configs=None, model_configs=No
                         prediction_wand = predictions[0].detach().cpu()
 
                         if configs['scale_input'] is not None:
-                            post_image_scale_vars = [post_scale_var_1[0], post_scale_var_2[0]]
-                            pre1_scale_vars = [pre1_scale_var_1[0], pre1_scale_var_2[0]]
-                            pre2_scale_vars = [pre2_scale_var_1[0], pre2_scale_var_2[0]]
+                            post_image_scale_vars = [
+                                post_scale_var_1[0], post_scale_var_2[0]]
+                            pre1_scale_vars = [
+                                pre1_scale_var_1[0], pre1_scale_var_2[0]]
+                            pre2_scale_vars = [
+                                pre2_scale_var_1[0], pre2_scale_var_2[0]]
 
                     if configs['log_zone_metrics']:
                         clz_in_batch = torch.unique(clz)
 
                         if 1 in clz_in_batch:
-                            accuracy_clzone1(predictions[clz==1, :, :], mask[clz==1, :, :])
-                            fscore_clzone1(predictions[clz==1, :, :] ,mask[clz==1, :, :])
-                            precision_clzone1(predictions[clz==1, :, :], mask[clz==1, :, :])
-                            recall_clzone1(predictions[clz==1, :, :], mask[clz==1, :, :])
-                            iou_clzone1(predictions[clz==1, :, :], mask[clz==1, :, :])
-                            samples_per_clzone[1] += predictions[clz==1, :, :].shape[0]
+                            accuracy_clzone1(
+                                predictions[clz == 1, :, :], mask[clz == 1, :, :])
+                            fscore_clzone1(
+                                predictions[clz == 1, :, :], mask[clz == 1, :, :])
+                            precision_clzone1(
+                                predictions[clz == 1, :, :], mask[clz == 1, :, :])
+                            recall_clzone1(
+                                predictions[clz == 1, :, :], mask[clz == 1, :, :])
+                            iou_clzone1(
+                                predictions[clz == 1, :, :], mask[clz == 1, :, :])
+                            samples_per_clzone[1] += predictions[clz ==
+                                                                 1, :, :].shape[0]
 
                         if 2 in clz_in_batch:
-                            accuracy_clzone2(predictions[clz==2, :, :], mask[clz==2, :, :])
-                            fscore_clzone2(predictions[clz==2, :, :], mask[clz==2, :, :])
-                            precision_clzone2(predictions[clz==2, :, :], mask[clz==2, :, :])
-                            recall_clzone2(predictions[clz==2, :, :], mask[clz==2, :, :])
-                            iou_clzone2(predictions[clz==2, :, :], mask[clz==2, :, :])
-                            samples_per_clzone[2] += predictions[clz==2, :, :].shape[0]
+                            accuracy_clzone2(
+                                predictions[clz == 2, :, :], mask[clz == 2, :, :])
+                            fscore_clzone2(
+                                predictions[clz == 2, :, :], mask[clz == 2, :, :])
+                            precision_clzone2(
+                                predictions[clz == 2, :, :], mask[clz == 2, :, :])
+                            recall_clzone2(
+                                predictions[clz == 2, :, :], mask[clz == 2, :, :])
+                            iou_clzone2(
+                                predictions[clz == 2, :, :], mask[clz == 2, :, :])
+                            samples_per_clzone[2] += predictions[clz ==
+                                                                 2, :, :].shape[0]
 
                         if 3 in clz_in_batch:
-                            accuracy_clzone3(predictions[clz==3, :, :], mask[clz==3, :, :])
-                            fscore_clzone3(predictions[clz==3, :, :], mask[clz==3, :, :])
-                            precision_clzone3(predictions[clz==3, :, :], mask[clz==3, :, :])
-                            recall_clzone3(predictions[clz==3, :, :], mask[clz==3, :, :])
-                            iou_clzone3(predictions[clz==3, :, :], mask[clz==3, :, :])
-                            samples_per_clzone[3] += predictions[clz==3, :, :].shape[0]
+                            accuracy_clzone3(
+                                predictions[clz == 3, :, :], mask[clz == 3, :, :])
+                            fscore_clzone3(
+                                predictions[clz == 3, :, :], mask[clz == 3, :, :])
+                            precision_clzone3(
+                                predictions[clz == 3, :, :], mask[clz == 3, :, :])
+                            recall_clzone3(
+                                predictions[clz == 3, :, :], mask[clz == 3, :, :])
+                            iou_clzone3(
+                                predictions[clz == 3, :, :], mask[clz == 3, :, :])
+                            samples_per_clzone[3] += predictions[clz ==
+                                                                 3, :, :].shape[0]
 
                     if configs['log_AOI_metrics']:
                         activs_in_batch = torch.unique(activ)
 
                         for activ_i in [i.item() for i in activs_in_batch]:
-                            activ_metrics[activ_i][0](predictions[activ==activ_i, :, :], mask[activ==activ_i, :, :]) # accuracy
-                            activ_metrics[activ_i][1](predictions[activ==activ_i, :, :], mask[activ==activ_i, :, :]) # fscore
-                            activ_metrics[activ_i][2](predictions[activ==activ_i, :, :], mask[activ==activ_i, :, :]) # precision
-                            activ_metrics[activ_i][3](predictions[activ==activ_i, :, :], mask[activ==activ_i, :, :]) # recall
-                            activ_metrics[activ_i][4](predictions[activ==activ_i, :, :], mask[activ==activ_i, :, :]) # iou
+                            activ_metrics[activ_i][0](
+                                predictions[activ == activ_i, :, :], mask[activ == activ_i, :, :])  # accuracy
+                            activ_metrics[activ_i][1](
+                                predictions[activ == activ_i, :, :], mask[activ == activ_i, :, :])  # fscore
+                            activ_metrics[activ_i][2](
+                                predictions[activ == activ_i, :, :], mask[activ == activ_i, :, :])  # precision
+                            activ_metrics[activ_i][3](
+                                predictions[activ == activ_i, :, :], mask[activ == activ_i, :, :])  # recall
+                            activ_metrics[activ_i][4](
+                                predictions[activ == activ_i, :, :], mask[activ == activ_i, :, :])  # iou
 
             pbar.update(1)
 
@@ -481,13 +550,22 @@ def eval_change_detection(model, loader, settype, configs=None, model_configs=No
 
         # Reverse image scaling for visualization purposes
         if configs['scale_input'] not in [None, 'custom']:
-            pre_event_1_wand = reverse_scale_img(pre_event_1_wand, pre1_scale_vars[0], pre1_scale_vars[1], configs)
-            pre_event_2_wand = reverse_scale_img(pre_event_2_wand, pre2_scale_vars[0], pre2_scale_vars[1], configs)
-            post_image_wand = reverse_scale_img(post_image_wand, post_image_scale_vars[0], post_image_scale_vars[1], configs)
+            pre_event_1_wand = reverse_scale_img(
+                pre_event_1_wand, pre1_scale_vars[0], pre1_scale_vars[1], configs)
+            pre_event_2_wand = reverse_scale_img(
+                pre_event_2_wand, pre2_scale_vars[0], pre2_scale_vars[1], configs)
+            post_image_wand = reverse_scale_img(
+                post_image_wand, post_image_scale_vars[0], post_image_scale_vars[1], configs)
 
-        post_image_wand = kornia.enhance.adjust_gamma(post_image_wand,gamma=0.3)#kornia.enhance.adjust_brightness(first_image, 0.2)
-        pre_event_1_wand = kornia.enhance.adjust_gamma(pre_event_1_wand,gamma=0.3)#kornia.enhance.adjust_brightness(first_image, 0.2)
-        pre_event_2_wand = kornia.enhance.adjust_gamma(pre_event_2_wand,gamma=0.3)#kornia.enhance.adjust_brightness(first_image, 0.2)
+        # kornia.enhance.adjust_brightness(first_image, 0.2)
+        post_image_wand = kornia.enhance.adjust_gamma(
+            post_image_wand, gamma=0.3)
+        # kornia.enhance.adjust_brightness(first_image, 0.2)
+        pre_event_1_wand = kornia.enhance.adjust_gamma(
+            pre_event_1_wand, gamma=0.3)
+        # kornia.enhance.adjust_brightness(first_image, 0.2)
+        pre_event_2_wand = kornia.enhance.adjust_gamma(
+            pre_event_2_wand, gamma=0.3)
 
         mask_img = wandb.Image((post_image_wand[0] * 255).int().cpu().detach().numpy(), masks={
             "predictions": {
@@ -559,11 +637,16 @@ def eval_change_detection(model, loader, settype, configs=None, model_configs=No
         activ_i_metrics = {}
         for activ_i, activ_i_metrics_f in activ_metrics.items():
             activ_i_metrics[activ_i] = {}
-            activ_i_metrics[activ_i]['accuracy'] = activ_i_metrics_f[0].compute() # accuracy
-            activ_i_metrics[activ_i]['fscore'] = activ_i_metrics_f[1].compute() # fscore
-            activ_i_metrics[activ_i]['precision'] = activ_i_metrics_f[2].compute() # precision
-            activ_i_metrics[activ_i]['recall'] = activ_i_metrics_f[3].compute() # recall
-            activ_i_metrics[activ_i]['iou'] = activ_i_metrics_f[4].compute() # iou
+            # accuracy
+            activ_i_metrics[activ_i]['accuracy'] = activ_i_metrics_f[0].compute()
+            # fscore
+            activ_i_metrics[activ_i]['fscore'] = activ_i_metrics_f[1].compute()
+            # precision
+            activ_i_metrics[activ_i]['precision'] = activ_i_metrics_f[2].compute()
+            # recall
+            activ_i_metrics[activ_i]['recall'] = activ_i_metrics_f[3].compute()
+            # iou
+            activ_i_metrics[activ_i]['iou'] = activ_i_metrics_f[4].compute()
 
     if configs['on_screen_prints']:
         print(f'\n{"="*20}')
@@ -572,12 +655,18 @@ def eval_change_detection(model, loader, settype, configs=None, model_configs=No
         print(f'{settype} Accuracy ({CLASS_LABELS[0]}): {100 * acc[0].item()}')
         print(f'{settype} Accuracy ({CLASS_LABELS[1]}): {100 * acc[1].item()}')
         print(f'{settype} Accuracy ({CLASS_LABELS[2]}): {100 * acc[2].item()}')
-        print(f'{settype} F-Score ({CLASS_LABELS[0]}): {100 * score[0].item()}')
-        print(f'{settype} F-Score ({CLASS_LABELS[1]}): {100 * score[1].item()}')
-        print(f'{settype} F-Score ({CLASS_LABELS[2]}): {100 * score[2].item()}')
-        print(f'{settype} Precision ({CLASS_LABELS[0]}): {100 * prec[0].item()}')
-        print(f'{settype} Precision ({CLASS_LABELS[1]}): {100 * prec[1].item()}')
-        print(f'{settype} Precision ({CLASS_LABELS[2]}): {100 * prec[2].item()}')
+        print(
+            f'{settype} F-Score ({CLASS_LABELS[0]}): {100 * score[0].item()}')
+        print(
+            f'{settype} F-Score ({CLASS_LABELS[1]}): {100 * score[1].item()}')
+        print(
+            f'{settype} F-Score ({CLASS_LABELS[2]}): {100 * score[2].item()}')
+        print(
+            f'{settype} Precision ({CLASS_LABELS[0]}): {100 * prec[0].item()}')
+        print(
+            f'{settype} Precision ({CLASS_LABELS[1]}): {100 * prec[1].item()}')
+        print(
+            f'{settype} Precision ({CLASS_LABELS[2]}): {100 * prec[2].item()}')
         print(f'{settype} Recall ({CLASS_LABELS[0]}): {100 * rec[0].item()}')
         print(f'{settype} Recall ({CLASS_LABELS[1]}): {100 * rec[1].item()}')
         print(f'{settype} Recall ({CLASS_LABELS[2]}): {100 * rec[2].item()}')
@@ -587,78 +676,127 @@ def eval_change_detection(model, loader, settype, configs=None, model_configs=No
         print(f'{settype} MeanIoU: {mean_iou * 100}')
 
         if configs['evaluate_water']:
-            print(f'{settype} F-Score (Only water): {100 * water_total_fscore[1].item()}')
+            print(
+                f'{settype} F-Score (Only water): {100 * water_total_fscore[1].item()}')
 
         print(f'\n{"="*20}')
 
         if configs['log_zone_metrics']:
             print(f'\n{"="*20}\n')
             print('Metrics for climatic zone 1')
-            print('Number of samples for climatic zone 1 = ',samples_per_clzone[1])
+            print('Number of samples for climatic zone 1 = ',
+                  samples_per_clzone[1])
             print(f'\n{"="*20}')
-            print(f'{settype} Accuracy ({CLASS_LABELS[0]}): {100 * acc_clz1[0].item()}')
-            print(f'{settype} Accuracy ({CLASS_LABELS[1]}): {100 * acc_clz1[1].item()}')
-            print(f'{settype} Accuracy ({CLASS_LABELS[2]}): {100 * acc_clz1[2].item()}')
-            print(f'{settype} F-Score ({CLASS_LABELS[0]}): {100 * score_clz1[0].item()}')
-            print(f'{settype} F-Score ({CLASS_LABELS[1]}): {100 * score_clz1[1].item()}')
-            print(f'{settype} F-Score ({CLASS_LABELS[2]}): {100 * score_clz1[2].item()}')
-            print(f'{settype} Precision ({CLASS_LABELS[0]}): {100 * prec_clz1[0].item()}')
-            print(f'{settype} Precision ({CLASS_LABELS[1]}): {100 * prec_clz1[1].item()}')
-            print(f'{settype} Precision ({CLASS_LABELS[2]}): {100 * prec_clz1[2].item()}')
-            print(f'{settype} Recall ({CLASS_LABELS[0]}): {100 * rec_clz1[0].item()}')
-            print(f'{settype} Recall ({CLASS_LABELS[1]}): {100 * rec_clz1[1].item()}')
-            print(f'{settype} Recall ({CLASS_LABELS[2]}): {100 * rec_clz1[2].item()}')
-            print(f'{settype} IoU ({CLASS_LABELS[0]}): {100 * ious_clz1[0].item()}')
-            print(f'{settype} IoU ({CLASS_LABELS[1]}): {100 * ious_clz1[1].item()}')
-            print(f'{settype} IoU ({CLASS_LABELS[2]}): {100 * ious_clz1[2].item()}')
+            print(
+                f'{settype} Accuracy ({CLASS_LABELS[0]}): {100 * acc_clz1[0].item()}')
+            print(
+                f'{settype} Accuracy ({CLASS_LABELS[1]}): {100 * acc_clz1[1].item()}')
+            print(
+                f'{settype} Accuracy ({CLASS_LABELS[2]}): {100 * acc_clz1[2].item()}')
+            print(
+                f'{settype} F-Score ({CLASS_LABELS[0]}): {100 * score_clz1[0].item()}')
+            print(
+                f'{settype} F-Score ({CLASS_LABELS[1]}): {100 * score_clz1[1].item()}')
+            print(
+                f'{settype} F-Score ({CLASS_LABELS[2]}): {100 * score_clz1[2].item()}')
+            print(
+                f'{settype} Precision ({CLASS_LABELS[0]}): {100 * prec_clz1[0].item()}')
+            print(
+                f'{settype} Precision ({CLASS_LABELS[1]}): {100 * prec_clz1[1].item()}')
+            print(
+                f'{settype} Precision ({CLASS_LABELS[2]}): {100 * prec_clz1[2].item()}')
+            print(
+                f'{settype} Recall ({CLASS_LABELS[0]}): {100 * rec_clz1[0].item()}')
+            print(
+                f'{settype} Recall ({CLASS_LABELS[1]}): {100 * rec_clz1[1].item()}')
+            print(
+                f'{settype} Recall ({CLASS_LABELS[2]}): {100 * rec_clz1[2].item()}')
+            print(
+                f'{settype} IoU ({CLASS_LABELS[0]}): {100 * ious_clz1[0].item()}')
+            print(
+                f'{settype} IoU ({CLASS_LABELS[1]}): {100 * ious_clz1[1].item()}')
+            print(
+                f'{settype} IoU ({CLASS_LABELS[2]}): {100 * ious_clz1[2].item()}')
             print(f'{settype} MeanIoU: {mean_iou_clz1 * 100}')
 
             print(f'\n{"="*20}')
 
             print(f'\n{"="*20}\n')
             print('Metrics for climatic zone 2')
-            print('Number of samples for climatic zone 2 = ',samples_per_clzone[2])
+            print('Number of samples for climatic zone 2 = ',
+                  samples_per_clzone[2])
 
             print(f'\n{"="*20}')
-            print(f'{settype} Accuracy ({CLASS_LABELS[0]}): {100 * acc_clz2[0].item()}')
-            print(f'{settype} Accuracy ({CLASS_LABELS[1]}): {100 * acc_clz2[1].item()}')
-            print(f'{settype} Accuracy ({CLASS_LABELS[2]}): {100 * acc_clz2[2].item()}')
-            print(f'{settype} F-Score ({CLASS_LABELS[0]}): {100 * score_clz2[0].item()}')
-            print(f'{settype} F-Score ({CLASS_LABELS[1]}): {100 * score_clz2[1].item()}')
-            print(f'{settype} F-Score ({CLASS_LABELS[2]}): {100 * score_clz2[2].item()}')
-            print(f'{settype} Precision ({CLASS_LABELS[0]}): {100 * prec_clz2[0].item()}')
-            print(f'{settype} Precision ({CLASS_LABELS[1]}): {100 * prec_clz2[1].item()}')
-            print(f'{settype} Precision ({CLASS_LABELS[2]}): {100 * prec_clz2[2].item()}')
-            print(f'{settype} Recall ({CLASS_LABELS[0]}): {100 * rec_clz2[0].item()}')
-            print(f'{settype} Recall ({CLASS_LABELS[1]}): {100 * rec_clz2[1].item()}')
-            print(f'{settype} Recall ({CLASS_LABELS[2]}): {100 * rec_clz2[2].item()}')
-            print(f'{settype} IoU ({CLASS_LABELS[0]}): {100 * ious_clz2[0].item()}')
-            print(f'{settype} IoU ({CLASS_LABELS[1]}): {100 * ious_clz2[1].item()}')
-            print(f'{settype} IoU ({CLASS_LABELS[2]}): {100 * ious_clz2[2].item()}')
+            print(
+                f'{settype} Accuracy ({CLASS_LABELS[0]}): {100 * acc_clz2[0].item()}')
+            print(
+                f'{settype} Accuracy ({CLASS_LABELS[1]}): {100 * acc_clz2[1].item()}')
+            print(
+                f'{settype} Accuracy ({CLASS_LABELS[2]}): {100 * acc_clz2[2].item()}')
+            print(
+                f'{settype} F-Score ({CLASS_LABELS[0]}): {100 * score_clz2[0].item()}')
+            print(
+                f'{settype} F-Score ({CLASS_LABELS[1]}): {100 * score_clz2[1].item()}')
+            print(
+                f'{settype} F-Score ({CLASS_LABELS[2]}): {100 * score_clz2[2].item()}')
+            print(
+                f'{settype} Precision ({CLASS_LABELS[0]}): {100 * prec_clz2[0].item()}')
+            print(
+                f'{settype} Precision ({CLASS_LABELS[1]}): {100 * prec_clz2[1].item()}')
+            print(
+                f'{settype} Precision ({CLASS_LABELS[2]}): {100 * prec_clz2[2].item()}')
+            print(
+                f'{settype} Recall ({CLASS_LABELS[0]}): {100 * rec_clz2[0].item()}')
+            print(
+                f'{settype} Recall ({CLASS_LABELS[1]}): {100 * rec_clz2[1].item()}')
+            print(
+                f'{settype} Recall ({CLASS_LABELS[2]}): {100 * rec_clz2[2].item()}')
+            print(
+                f'{settype} IoU ({CLASS_LABELS[0]}): {100 * ious_clz2[0].item()}')
+            print(
+                f'{settype} IoU ({CLASS_LABELS[1]}): {100 * ious_clz2[1].item()}')
+            print(
+                f'{settype} IoU ({CLASS_LABELS[2]}): {100 * ious_clz2[2].item()}')
             print(f'{settype} MeanIoU: {mean_iou_clz2 * 100}')
 
             print(f'\n{"="*20}')
 
             print(f'\n{"="*20}\n')
             print('Metrics for climatic zone 3')
-            print('Number of samples for climatic zone 3 = ',samples_per_clzone[3])
+            print('Number of samples for climatic zone 3 = ',
+                  samples_per_clzone[3])
 
             print(f'\n{"="*20}')
-            print(f'{settype} Accuracy ({CLASS_LABELS[0]}): {100 * acc_clz3[0].item()}')
-            print(f'{settype} Accuracy ({CLASS_LABELS[1]}): {100 * acc_clz3[1].item()}')
-            print(f'{settype} Accuracy ({CLASS_LABELS[2]}): {100 * acc_clz3[2].item()}')
-            print(f'{settype} F-Score ({CLASS_LABELS[0]}): {100 * score_clz3[0].item()}')
-            print(f'{settype} F-Score ({CLASS_LABELS[1]}): {100 * score_clz3[1].item()}')
-            print(f'{settype} F-Score ({CLASS_LABELS[2]}): {100 * score_clz3[2].item()}')
-            print(f'{settype} Precision ({CLASS_LABELS[0]}): {100 * prec_clz3[0].item()}')
-            print(f'{settype} Precision ({CLASS_LABELS[1]}): {100 * prec_clz3[1].item()}')
-            print(f'{settype} Precision ({CLASS_LABELS[2]}): {100 * prec_clz3[2].item()}')
-            print(f'{settype} Recall ({CLASS_LABELS[0]}): {100 * rec_clz3[0].item()}')
-            print(f'{settype} Recall ({CLASS_LABELS[1]}): {100 * rec_clz3[1].item()}')
-            print(f'{settype} Recall ({CLASS_LABELS[2]}): {100 * rec_clz3[2].item()}')
-            print(f'{settype} IoU ({CLASS_LABELS[0]}): {100 * ious_clz3[0].item()}')
-            print(f'{settype} IoU ({CLASS_LABELS[1]}): {100 * ious_clz3[1].item()}')
-            print(f'{settype} IoU ({CLASS_LABELS[2]}): {100 * ious_clz3[2].item()}')
+            print(
+                f'{settype} Accuracy ({CLASS_LABELS[0]}): {100 * acc_clz3[0].item()}')
+            print(
+                f'{settype} Accuracy ({CLASS_LABELS[1]}): {100 * acc_clz3[1].item()}')
+            print(
+                f'{settype} Accuracy ({CLASS_LABELS[2]}): {100 * acc_clz3[2].item()}')
+            print(
+                f'{settype} F-Score ({CLASS_LABELS[0]}): {100 * score_clz3[0].item()}')
+            print(
+                f'{settype} F-Score ({CLASS_LABELS[1]}): {100 * score_clz3[1].item()}')
+            print(
+                f'{settype} F-Score ({CLASS_LABELS[2]}): {100 * score_clz3[2].item()}')
+            print(
+                f'{settype} Precision ({CLASS_LABELS[0]}): {100 * prec_clz3[0].item()}')
+            print(
+                f'{settype} Precision ({CLASS_LABELS[1]}): {100 * prec_clz3[1].item()}')
+            print(
+                f'{settype} Precision ({CLASS_LABELS[2]}): {100 * prec_clz3[2].item()}')
+            print(
+                f'{settype} Recall ({CLASS_LABELS[0]}): {100 * rec_clz3[0].item()}')
+            print(
+                f'{settype} Recall ({CLASS_LABELS[1]}): {100 * rec_clz3[1].item()}')
+            print(
+                f'{settype} Recall ({CLASS_LABELS[2]}): {100 * rec_clz3[2].item()}')
+            print(
+                f'{settype} IoU ({CLASS_LABELS[0]}): {100 * ious_clz3[0].item()}')
+            print(
+                f'{settype} IoU ({CLASS_LABELS[1]}): {100 * ious_clz3[1].item()}')
+            print(
+                f'{settype} IoU ({CLASS_LABELS[2]}): {100 * ious_clz3[2].item()}')
             print(f'{settype} MeanIoU: {mean_iou_clz3 * 100}')
 
             print(f'\n{"="*20}')
@@ -668,22 +806,38 @@ def eval_change_detection(model, loader, settype, configs=None, model_configs=No
                 print(f'\n{"="*20}\n')
                 print(f'Metrics for AOI {activ_i}')
                 print(f'\n{"="*20}')
-                print(f'{settype} AOI {activ_i} Accuracy ({CLASS_LABELS[0]}): {100 * activ_i_metrics_list["accuracy"][0].item()}')
-                print(f'{settype} AOI {activ_i} Accuracy ({CLASS_LABELS[1]}): {100 * activ_i_metrics_list["accuracy"][1].item()}')
-                print(f'{settype} AOI {activ_i} Accuracy ({CLASS_LABELS[2]}): {100 * activ_i_metrics_list["accuracy"][2].item()}')
-                print(f'{settype} AOI {activ_i} F-Score ({CLASS_LABELS[0]}): {100 * activ_i_metrics_list["fscore"][0].item()}')
-                print(f'{settype} AOI {activ_i} F-Score ({CLASS_LABELS[1]}): {100 * activ_i_metrics_list["fscore"][1].item()}')
-                print(f'{settype} AOI {activ_i} F-Score ({CLASS_LABELS[2]}): {100 * activ_i_metrics_list["fscore"][2].item()}')
-                print(f'{settype} AOI {activ_i} Precision ({CLASS_LABELS[0]}): {100 * activ_i_metrics_list["precision"][0].item()}')
-                print(f'{settype} AOI {activ_i} Precision ({CLASS_LABELS[1]}): {100 * activ_i_metrics_list["precision"][1].item()}')
-                print(f'{settype} AOI {activ_i} Precision ({CLASS_LABELS[2]}): {100 * activ_i_metrics_list["precision"][2].item()}')
-                print(f'{settype} AOI {activ_i} Recall ({CLASS_LABELS[0]}): {100 * activ_i_metrics_list["recall"][0].item()}')
-                print(f'{settype} AOI {activ_i} Recall ({CLASS_LABELS[1]}): {100 * activ_i_metrics_list["recall"][1].item()}')
-                print(f'{settype} AOI {activ_i} Recall ({CLASS_LABELS[2]}): {100 * activ_i_metrics_list["recall"][2].item()}')
-                print(f'{settype} AOI {activ_i} IoU ({CLASS_LABELS[0]}): {100 * activ_i_metrics_list["iou"][0].item()}')
-                print(f'{settype} AOI {activ_i} IoU ({CLASS_LABELS[1]}): {100 * activ_i_metrics_list["iou"][1].item()}')
-                print(f'{settype} AOI {activ_i} IoU ({CLASS_LABELS[2]}): {100 * activ_i_metrics_list["iou"][2].item()}')
-                print(f'{settype} AOI {activ_i} MeanIoU: {activ_i_metrics_list["iou"][:3].mean() * 100}')
+                print(
+                    f'{settype} AOI {activ_i} Accuracy ({CLASS_LABELS[0]}): {100 * activ_i_metrics_list["accuracy"][0].item()}')
+                print(
+                    f'{settype} AOI {activ_i} Accuracy ({CLASS_LABELS[1]}): {100 * activ_i_metrics_list["accuracy"][1].item()}')
+                print(
+                    f'{settype} AOI {activ_i} Accuracy ({CLASS_LABELS[2]}): {100 * activ_i_metrics_list["accuracy"][2].item()}')
+                print(
+                    f'{settype} AOI {activ_i} F-Score ({CLASS_LABELS[0]}): {100 * activ_i_metrics_list["fscore"][0].item()}')
+                print(
+                    f'{settype} AOI {activ_i} F-Score ({CLASS_LABELS[1]}): {100 * activ_i_metrics_list["fscore"][1].item()}')
+                print(
+                    f'{settype} AOI {activ_i} F-Score ({CLASS_LABELS[2]}): {100 * activ_i_metrics_list["fscore"][2].item()}')
+                print(
+                    f'{settype} AOI {activ_i} Precision ({CLASS_LABELS[0]}): {100 * activ_i_metrics_list["precision"][0].item()}')
+                print(
+                    f'{settype} AOI {activ_i} Precision ({CLASS_LABELS[1]}): {100 * activ_i_metrics_list["precision"][1].item()}')
+                print(
+                    f'{settype} AOI {activ_i} Precision ({CLASS_LABELS[2]}): {100 * activ_i_metrics_list["precision"][2].item()}')
+                print(
+                    f'{settype} AOI {activ_i} Recall ({CLASS_LABELS[0]}): {100 * activ_i_metrics_list["recall"][0].item()}')
+                print(
+                    f'{settype} AOI {activ_i} Recall ({CLASS_LABELS[1]}): {100 * activ_i_metrics_list["recall"][1].item()}')
+                print(
+                    f'{settype} AOI {activ_i} Recall ({CLASS_LABELS[2]}): {100 * activ_i_metrics_list["recall"][2].item()}')
+                print(
+                    f'{settype} AOI {activ_i} IoU ({CLASS_LABELS[0]}): {100 * activ_i_metrics_list["iou"][0].item()}')
+                print(
+                    f'{settype} AOI {activ_i} IoU ({CLASS_LABELS[1]}): {100 * activ_i_metrics_list["iou"][1].item()}')
+                print(
+                    f'{settype} AOI {activ_i} IoU ({CLASS_LABELS[2]}): {100 * activ_i_metrics_list["iou"][2].item()}')
+                print(
+                    f'{settype} AOI {activ_i} MeanIoU: {activ_i_metrics_list["iou"][:3].mean() * 100}')
 
                 print(f'\n{"="*20}')
 
@@ -708,7 +862,8 @@ def eval_change_detection(model, loader, settype, configs=None, model_configs=No
             f'{settype} MeanIoU': mean_iou * 100}
 
         if configs['evaluate_water']:
-            log_dict.update({f'{settype} F-Score (Only water)': 100 * water_total_fscore[1].item()})
+            log_dict.update(
+                {f'{settype} F-Score (Only water)': 100 * water_total_fscore[1].item()})
 
         if configs['log_zone_metrics']:
             log_dict.update({
@@ -788,4 +943,3 @@ def eval_change_detection(model, loader, settype, configs=None, model_configs=No
         wandb.log(log_dict)
 
     return 100 * acc, 100 * score[:3].mean(), 100 * mean_iou
-

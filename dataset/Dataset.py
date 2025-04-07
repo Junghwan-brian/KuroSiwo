@@ -37,7 +37,7 @@ class Dataset(torch.utils.data.Dataset):
         self.test_acts = configs["test_acts"]
         self.mode = mode
         self.configs = configs
-        self.root_path = os.path.join(self.configs["root_path"], "data")
+        self.root_path = self.configs["root_path"]
         if (
             self.configs["task"] == "self-supervised"
             or self.configs["data_augmentations"]
@@ -72,7 +72,8 @@ class Dataset(torch.utils.data.Dataset):
             total_grids = self.grids
         else:
             self.grids = get_grids(pickle_path=self.pickle_path)
-            self.negative_grids = get_grids(pickle_path=configs["negative_pickle"])
+            self.negative_grids = get_grids(
+                pickle_path=configs["negative_pickle"])
             total_grids.update(self.grids)
             total_grids.update(self.negative_grids)
             print("=" * 20)
@@ -137,7 +138,8 @@ class Dataset(torch.utils.data.Dataset):
         print("Samples per Activation for mode: ", self.mode)
         print(self.act_stats)
         self.num_examples = len(self.records)
-        self.activations = set([record["activation"] for record in self.records])
+        self.activations = set([record["activation"]
+                               for record in self.records])
 
     def __len__(self):
         return self.num_examples
@@ -159,7 +161,8 @@ class Dataset(torch.utils.data.Dataset):
         image = torch.from_numpy(image).float()
 
         if self.configs["clamp_input"] is not None:
-            image = torch.clamp(image, min=0.0, max=self.configs["clamp_input"])
+            image = torch.clamp(
+                image, min=0.0, max=self.configs["clamp_input"])
             image = torch.nan_to_num(image, self.configs["clamp_input"])
         else:
             image = torch.nan_to_num(image, 200)
@@ -167,9 +170,11 @@ class Dataset(torch.utils.data.Dataset):
 
     def create_views(self, event, mask=None):
         if mask is None:
-            transform = self.augmentations(image=event.permute(1, 2, 0).numpy())
+            transform = self.augmentations(
+                image=event.permute(1, 2, 0).numpy())
             view_1 = transform["image"]
-            transform_2 = self.augmentations(image=event.permute(1, 2, 0).numpy())
+            transform_2 = self.augmentations(
+                image=event.permute(1, 2, 0).numpy())
             view_2 = transform_2["image"]
             return torch.from_numpy(view_1).permute(2, 0, 1), torch.from_numpy(
                 view_2
@@ -271,7 +276,8 @@ class Dataset(torch.utils.data.Dataset):
                 return mins, maxs, (img - mins) / (maxs - mins)
         elif isinstance(self.configs["scale_input"], list):
             # The required min and max values are given
-            new_min, new_max = [torch.tensor(i) for i in self.configs["scale_input"]]
+            new_min, new_max = [torch.tensor(i)
+                                for i in self.configs["scale_input"]]
 
             if len(self.configs["channels"]) > 1:
                 mins = {}
@@ -347,7 +353,8 @@ class Dataset(torch.utils.data.Dataset):
                         f'{img_name}_{self.configs["channels"][0]}'
                     ][1]
                 return (
-                    torch.mul((img - mins) / (maxs - mins), (new_max - new_min))
+                    torch.mul((img - mins) / (maxs - mins),
+                              (new_max - new_min))
                     + new_min
                 )
         elif self.configs["scale_input"] == "custom":
@@ -406,7 +413,8 @@ class Dataset(torch.utils.data.Dataset):
                     ][f'{img_name}_{self.configs["channels"][0]}'][0]
 
                 if self.configs["clamp_input"] is not None:
-                    maxs[self.configs["channels"][0]] = self.configs["clamp_input"]
+                    maxs[self.configs["channels"][0]
+                         ] = self.configs["clamp_input"]
                 elif self.configs["channels"] == ["vh/vv"]:
                     maxs["vh/vv"] = (
                         self.min_max_random_events[activation][f"{img_name}_vh"][1]
@@ -457,7 +465,8 @@ class Dataset(torch.utils.data.Dataset):
                 img_scaled = (img_scaled - mins) / (maxs - mins)
 
             # 4) Contrast stretching
-            intens_scaling = RescaleIntensity(out_min_max=(0, 1), percentiles=(2, 98))
+            intens_scaling = RescaleIntensity(
+                out_min_max=(0, 1), percentiles=(2, 98))
 
             if len(self.configs["channels"]) > 1:
                 new_ch = []
@@ -477,7 +486,8 @@ class Dataset(torch.utils.data.Dataset):
                 return (
                     list(mins.values()),
                     list(maxs.values()),
-                    intens_scaling(img_scaled[None, :, :]).squeeze()[None, :, :],
+                    intens_scaling(img_scaled[None, :, :]).squeeze()[
+                        None, :, :],
                 )
 
     def update_min_max_stats(self):
@@ -569,61 +579,73 @@ class Dataset(torch.utils.data.Dataset):
                     "pre1_vv": (
                         min(
                             ma.min(sec1_vv),
-                            min_max_random_events[record["activation"]]["pre1_vv"][0],
+                            min_max_random_events[record["activation"]
+                                                  ]["pre1_vv"][0],
                         ),
                         max(
                             ma.max(sec1_vv),
-                            min_max_random_events[record["activation"]]["pre1_vv"][1],
+                            min_max_random_events[record["activation"]
+                                                  ]["pre1_vv"][1],
                         ),
                     ),
                     "pre1_vh": (
                         min(
                             ma.min(sec1_vh),
-                            min_max_random_events[record["activation"]]["pre1_vh"][0],
+                            min_max_random_events[record["activation"]
+                                                  ]["pre1_vh"][0],
                         ),
                         max(
                             ma.max(sec1_vh),
-                            min_max_random_events[record["activation"]]["pre1_vh"][1],
+                            min_max_random_events[record["activation"]
+                                                  ]["pre1_vh"][1],
                         ),
                     ),
                     "pre2_vv": (
                         min(
                             ma.min(sec2_vv),
-                            min_max_random_events[record["activation"]]["pre2_vv"][0],
+                            min_max_random_events[record["activation"]
+                                                  ]["pre2_vv"][0],
                         ),
                         max(
                             ma.max(sec2_vv),
-                            min_max_random_events[record["activation"]]["pre2_vv"][1],
+                            min_max_random_events[record["activation"]
+                                                  ]["pre2_vv"][1],
                         ),
                     ),
                     "pre2_vh": (
                         min(
                             ma.min(sec2_vh),
-                            min_max_random_events[record["activation"]]["pre2_vh"][0],
+                            min_max_random_events[record["activation"]
+                                                  ]["pre2_vh"][0],
                         ),
                         max(
                             ma.max(sec2_vh),
-                            min_max_random_events[record["activation"]]["pre2_vh"][1],
+                            min_max_random_events[record["activation"]
+                                                  ]["pre2_vh"][1],
                         ),
                     ),
                     "flood_vv": (
                         min(
                             ma.min(flood_vv),
-                            min_max_random_events[record["activation"]]["flood_vv"][0],
+                            min_max_random_events[record["activation"]
+                                                  ]["flood_vv"][0],
                         ),
                         max(
                             ma.max(flood_vv),
-                            min_max_random_events[record["activation"]]["flood_vv"][1],
+                            min_max_random_events[record["activation"]
+                                                  ]["flood_vv"][1],
                         ),
                     ),
                     "flood_vh": (
                         min(
                             ma.min(flood_vh),
-                            min_max_random_events[record["activation"]]["flood_vh"][0],
+                            min_max_random_events[record["activation"]
+                                                  ]["flood_vh"][0],
                         ),
                         max(
                             ma.max(flood_vh),
-                            min_max_random_events[record["activation"]]["flood_vh"][1],
+                            min_max_random_events[record["activation"]
+                                                  ]["flood_vh"][1],
                         ),
                     ),
                 }
@@ -725,45 +747,6 @@ class Dataset(torch.utils.data.Dataset):
                         sec2_vh *= 255
                         sec2_vh = sec2_vh.astype(np.uint8)
 
-                elif file.startswith("MK0_DEM"):
-                    # Get DEM
-                    dem = rio.open_rasterio(current_path)
-                    nans = dem.isnull()
-                    if nans.any():
-                        dem = dem.rio.interpolate_na()
-                        nans = dem.isnull()
-
-                    nodata = dem.rio.nodata
-                    dem = dem.to_numpy()
-                    if not self.configs["dem"] and self.configs["slope"]:
-                        print(
-                            "To return the slope the DEM option must be enabled. Validate the config file!"
-                        )
-                        exit(2)
-
-                    # Get slope before normalization
-                    if self.configs["slope"]:
-                        rd_dem = rd.rdarray(dem.squeeze(), no_data=nodata)
-                        slope = rd.TerrainAttribute(rd_dem, attrib="slope_riserun")
-                        slope = np.asarray(slope.data)
-                        slope = einops.rearrange(slope, "h w -> 1 h w")
-                        if self.configs["scale_input"] is not None:
-                            # Only support standarization for DEMs
-                            normalization = transforms.Normalize(
-                                mean=self.configs["slope_mean"],
-                                std=self.configs["slope_std"],
-                            )
-                            dem = normalization(torch.from_numpy(slope))
-                        else:
-                            dem = slope
-                    else:
-                        if self.configs["scale_input"] is not None:
-                            normalization = transforms.Normalize(
-                                mean=self.configs["dem_mean"],
-                                std=self.configs["dem_std"],
-                            )
-                            dem = normalization(torch.from_numpy(dem))
-
         # Concat channels
         if sample["type"] not in ("pre1", "pre2"):
             flood = self.concat(flood_vv, flood_vh)
@@ -795,9 +778,9 @@ class Dataset(torch.utils.data.Dataset):
                 # Certain augmentation pipelines may return no valid pixels, so we discard them
                 pre_event_1 = events_A[: pre_event_1.shape[0], :, :]
                 pre_event_2 = events_A[
-                    pre_event_1.shape[0] : 2 * pre_event_1.shape[0], :, :
+                    pre_event_1.shape[0]: 2 * pre_event_1.shape[0], :, :
                 ]
-                flood = events_A[2 * pre_event_1.shape[0] :, :, :]
+                flood = events_A[2 * pre_event_1.shape[0]:, :, :]
                 mask = masks_A[0]
                 valid_mask = masks_A[1]
         else:
@@ -818,43 +801,23 @@ class Dataset(torch.utils.data.Dataset):
                 pre_event_2, valid_mask, "pre2", activation
             )
 
-        if not self.configs["dem"]:
-            if self.configs["scale_input"] is not None:
-                return (
-                    flood_scale_var_1,
-                    flood_scale_var_2,
-                    flood,
-                    mask,
-                    pre1_scale_var_1,
-                    pre1_scale_var_2,
-                    pre_event_1,
-                    pre2_scale_var_1,
-                    pre2_scale_var_2,
-                    pre_event_2,
-                    clz,
-                    activation,
-                )
-            else:
-                return flood, mask, pre_event_1, pre_event_2, clz, activation
+        if self.configs["scale_input"] is not None:
+            return (
+                flood_scale_var_1,
+                flood_scale_var_2,
+                flood,
+                mask,
+                pre1_scale_var_1,
+                pre1_scale_var_2,
+                pre_event_1,
+                pre2_scale_var_1,
+                pre2_scale_var_2,
+                pre_event_2,
+                clz,
+                activation,
+            )
         else:
-            if self.configs["scale_input"] is not None:
-                return (
-                    flood_scale_var_1,
-                    flood_scale_var_2,
-                    flood,
-                    mask,
-                    pre1_scale_var_1,
-                    pre1_scale_var_2,
-                    pre_event_1,
-                    pre2_scale_var_1,
-                    pre2_scale_var_2,
-                    pre_event_2,
-                    dem,
-                    clz,
-                    activation,
-                )
-            else:
-                return flood, mask, pre_event_1, pre_event_2, dem, clz, activation
+            return flood, mask, pre_event_1, pre_event_2, clz, activation
 
 
 # Dataset class for SSL MAE training
@@ -882,7 +845,8 @@ class SSLDataset(torch.utils.data.Dataset):
                         hashes_dir = os.path.join(subfolder_dir, subfolder)
                         hashes = os.listdir(hashes_dir)
                         for hash_folder in hashes:
-                            hash_folder_dir = os.path.join(hashes_dir, hash_folder)
+                            hash_folder_dir = os.path.join(
+                                hashes_dir, hash_folder)
                             if os.path.isfile(hash_folder_dir):
                                 self.samples.append(
                                     os.path.join(subfolder_dir, subfolder)
@@ -917,7 +881,8 @@ class SSLDataset(torch.utils.data.Dataset):
         image = torch.from_numpy(image).float()
 
         if self.configs["clamp_input"] is not None:
-            image = torch.clamp(image, min=0.0, max=self.configs["clamp_input"])
+            image = torch.clamp(
+                image, min=0.0, max=self.configs["clamp_input"])
             image = torch.nan_to_num(image, self.configs["clamp_input"])
         else:
             image = torch.nan_to_num(image, 200)

@@ -13,9 +13,10 @@ from .bce_and_dice import BCEandDiceLoss
 
 
 def create_checkpoint_directory(configs, model_configs):
+    base_path = f"/home/junghwan/nas/kuro/checkpoints/{configs['task']}/"
     if "vit" in configs["method"].lower():
         checkpoint_path = (
-            "checkpoints/"
+            base_path
             + configs["method"]
             + "_patch"
             + str(model_configs["patch_size"])
@@ -29,11 +30,11 @@ def create_checkpoint_directory(configs, model_configs):
             + configs["track"]
         )
     elif configs["task"] == "diffusion-unsup":
-        checkpoint_path = "checkpoints/diffusion-unsup/"
+        checkpoint_path = base_path
     elif configs["task"] == "segmentation":
         if model_configs["backbone"]:
             checkpoint_path = (
-                "checkpoints/"
+                base_path
                 + model_configs["architecture"]
                 + "/"
                 + model_configs["backbone"]
@@ -45,10 +46,28 @@ def create_checkpoint_directory(configs, model_configs):
                 + configs["track"]
             )
         else:
-            checkpoint_path = "checkpoints/" + model_configs["architecture"]
+            checkpoint_path = base_path + \
+                model_configs["architecture"]
+    elif configs["task"] == "contrastive":
+        if model_configs["backbone"]:
+            checkpoint_path = (
+                base_path
+                + model_configs["architecture"]
+                + "/"
+                + model_configs["backbone"]
+                + "/"
+                + "-".join(configs["channels"])
+                + "_patches_"
+                + str(len(configs["inputs"]))
+                + "/"
+                + configs["track"]
+            )
+        else:
+            checkpoint_path = base_path + \
+                model_configs["architecture"]
     elif configs["task"] == "mae":
         checkpoint_path = (
-            "checkpoints/"
+            base_path
             + configs["method"].lower()
             + "/"
             + model_configs["backbone"].lower()
@@ -62,10 +81,11 @@ def create_checkpoint_directory(configs, model_configs):
     elif configs["task"] == "cd":
         run_ts = datetime.now().strftime("%Y%m%d%H%M%S")
         checkpoint_path = (
-            "checkpoints/" + configs["method"].lower() + f'/{configs["track"]}_{run_ts}'
+            base_path + configs["method"].lower() +
+            f'/{configs["track"]}_{run_ts}'
         )
     elif configs["task"] == "finetune":
-        checkpoint_path = "checkpoints/finetuning"
+        checkpoint_path = "/home/junghwan/nas/kuro/checkpoints/finetuning"
     Path(checkpoint_path).mkdir(parents=True, exist_ok=True)
     return checkpoint_path
 
@@ -207,7 +227,8 @@ def reverse_scale_img(img, x1, x2, configs):
                     * (x2[:, None, None][1, :, :] - x1[:, None, None][1, :, :])
                 ) + x1[:, None, None][1, :, :]
 
-                new_img = torch.cat((new_ch0[None, :, :], new_ch1[None, :, :]), dim=0)
+                new_img = torch.cat(
+                    (new_ch0[None, :, :], new_ch1[None, :, :]), dim=0)
 
             return new_img
         else:
@@ -257,7 +278,7 @@ def initialize_metrics(configs, mode="all"):
         task="multiclass",
         num_classes=configs["num_classes"] + 1,
         average="none",
-        multidim_average="global",
+        # multidim_average="global",
         ignore_index=3,
     ).to(configs["device"])
 
@@ -273,7 +294,8 @@ def init_lr_scheduler(optimizer, configs, model_configs, model_name=None, steps=
 
     # Initialize the LR scheduler
     if lr_schedule == "cosine":
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, steps)
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, steps)
     elif lr_schedule is None:
         lr_scheduler = torch.optim.lr_scheduler.LambdaLR(
             optimizer, lambda _: 1, last_epoch=-1
@@ -289,7 +311,8 @@ def init_lr_scheduler(optimizer, configs, model_configs, model_name=None, steps=
         )
     elif lr_schedule == "step":
         step_size = configs["epochs"] // 3
-        scheduler = lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=0.1)
+        scheduler = lr_scheduler.StepLR(
+            optimizer, step_size=step_size, gamma=0.1)
     else:
         raise NotImplementedError(
             f"{lr_schedule} LR scheduling is not yet implemented!"
@@ -379,8 +402,11 @@ def update_config(config, args=None):
         config['num_channels'] = len(config['channels'])
         if config['dem']:
             config['num_channels'] += 1
+    elif config['task'] == 'contrastive':
+        config['num_channels'] = len(config['channels'])
     else:
-        config['num_channels'] = len(config['channels']) * len(config['inputs'])
+        config['num_channels'] = len(
+            config['channels']) * len(config['inputs'])
         if config['dem']:
             config['num_channels'] += 1
 
@@ -410,10 +436,10 @@ def update_config(config, args=None):
 def define_tracks(configs):
     if configs["track"] == "RandomEvents":
         train_acts = [
-            130, 470, 205, 555, 118, 174, 324, 421, 554, 427, 518, 502,
+            130, 470, 205, 118, 174, 324, 421, 554, 427, 518, 502,
             498, 497, 496, 492, 147, 267, 273, 275, 417, 567
         ]
-        val_acts = [514, 559, 279, 520, 437]
+        val_acts = [279, 520, 437]  # TODO 현재 555 514 559가 없다 체크 필요.
         test_acts = [321, 561, 445, 562, 411, 277]
 
     configs["train_acts"] = train_acts

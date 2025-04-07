@@ -10,30 +10,20 @@ from tqdm import tqdm
 from models.model_utilities import *
 from utilities.utilities import *
 
-CLASS_LABELS = {0: "No water", 1: "Permanent Waters", 2: "Floods", 3: "Invalid pixels"}
+CLASS_LABELS = {0: "No water", 1: "Permanent Waters",
+                2: "Floods", 3: "Invalid pixels"}
 
 
 def train_semantic_segmentation(
     model, train_loader, val_loader, test_loader, configs, model_configs
 ):
-    if configs["wandb_activate"]:
-        # Store wandb id to continue run
-        id = wandb.util.generate_id()
-        json.dump({"run_id": id}, open(configs["checkpoint_path"] + "/id.json", "w"))
-        wandb.init(
-            project=configs["wandb_project"],
-            entity=configs["wandb_entity"],
-            config=configs,
-            id=id,
-            resume="allow",
-        )
-        wandb.watch(model, log_freq=20)
 
     # Accuracy, loss, optimizer, lr scheduler
     accuracy, fscore, precision, recall, iou = initialize_metrics(configs)
 
     criterion = create_loss(configs, mode="train")
-    optimizer = torch.optim.Adam(model.parameters(), lr=model_configs["learning_rate"])
+    optimizer = torch.optim.Adam(
+        model.parameters(), lr=model_configs["learning_rate"])
     lr_scheduler = init_lr_scheduler(
         optimizer, configs, model_configs, steps=len(train_loader)
     )
@@ -110,6 +100,7 @@ def train_semantic_segmentation(
                     dem = dem.to(configs["device"])
                     image = torch.cat((image, dem), dim=1)
                 if configs["inputs"] == ["post_event"]:
+                    # NOTE image: post event만 포함한 형태의 데이터.
                     output = model(image)
                 elif set(configs["inputs"]) == set(["pre_event_1", "post_event"]):
                     pre_event = pre_event.to(configs["device"])
@@ -140,7 +131,8 @@ def train_semantic_segmentation(
                 ):
                     pre_event = pre_event.to(configs["device"])
                     image = torch.cat((image, pre_event), dim=1)
-                    image = torch.cat((image, pre_event_2.to(configs["device"])), dim=1)
+                    image = torch.cat(
+                        (image, pre_event_2.to(configs["device"])), dim=1)
                     output = model(image)
                 else:
                     print('Invalid configuration for "inputs". Exiting...')
@@ -175,12 +167,18 @@ def train_semantic_segmentation(
                     print(f"Epoch: {epoch}")
                     print(f"Iteration: {index}")
                     print(f"Train Loss: {loss.item()}")
-                    print(f"Train Accuracy ({CLASS_LABELS[0]}): {100 * acc[0].item()}")
-                    print(f"Train Accuracy ({CLASS_LABELS[1]}): {100 * acc[1].item()}")
-                    print(f"Train Accuracy ({CLASS_LABELS[2]}): {100 * acc[2].item()}")
-                    print(f"Train F-Score ({CLASS_LABELS[0]}): {100 * score[0].item()}")
-                    print(f"Train F-Score ({CLASS_LABELS[1]}): {100 * score[1].item()}")
-                    print(f"Train F-Score ({CLASS_LABELS[2]}): {100 * score[2].item()}")
+                    print(
+                        f"Train Accuracy ({CLASS_LABELS[0]}): {100 * acc[0].item()}")
+                    print(
+                        f"Train Accuracy ({CLASS_LABELS[1]}): {100 * acc[1].item()}")
+                    print(
+                        f"Train Accuracy ({CLASS_LABELS[2]}): {100 * acc[2].item()}")
+                    print(
+                        f"Train F-Score ({CLASS_LABELS[0]}): {100 * score[0].item()}")
+                    print(
+                        f"Train F-Score ({CLASS_LABELS[1]}): {100 * score[1].item()}")
+                    print(
+                        f"Train F-Score ({CLASS_LABELS[2]}): {100 * score[2].item()}")
                     print(
                         f"Train Precision ({CLASS_LABELS[0]}): {100 * prec[0].item()}"
                     )
@@ -190,42 +188,20 @@ def train_semantic_segmentation(
                     print(
                         f"Train Precision ({CLASS_LABELS[2]}): {100 * prec[2].item()}"
                     )
-                    print(f"Train Recall ({CLASS_LABELS[0]}): {100 * rec[0].item()}")
-                    print(f"Train Recall ({CLASS_LABELS[1]}): {100 * rec[1].item()}")
-                    print(f"Train Recall ({CLASS_LABELS[2]}): {100 * rec[2].item()}")
-                    print(f"Train IoU ({CLASS_LABELS[0]}): {100 * ious[0].item()}")
-                    print(f"Train IoU ({CLASS_LABELS[1]}): {100 * ious[1].item()}")
-                    print(f"Train IoU ({CLASS_LABELS[2]}): {100 * ious[2].item()}")
+                    print(
+                        f"Train Recall ({CLASS_LABELS[0]}): {100 * rec[0].item()}")
+                    print(
+                        f"Train Recall ({CLASS_LABELS[1]}): {100 * rec[1].item()}")
+                    print(
+                        f"Train Recall ({CLASS_LABELS[2]}): {100 * rec[2].item()}")
+                    print(
+                        f"Train IoU ({CLASS_LABELS[0]}): {100 * ious[0].item()}")
+                    print(
+                        f"Train IoU ({CLASS_LABELS[1]}): {100 * ious[1].item()}")
+                    print(
+                        f"Train IoU ({CLASS_LABELS[2]}): {100 * ious[2].item()}")
                     print(f"Train MeanIoU: {mean_iou * 100}")
                     print(f"lr: {lr_scheduler.get_last_lr()[0]}")
-                elif configs["wandb_activate"]:
-                    wandb.log(
-                        {
-                            "Epoch": epoch,
-                            "Iteration": index,
-                            "Train Loss": loss.item(),
-                            f"Train Accuracy ({CLASS_LABELS[0]})": 100 * acc[0].item(),
-                            f"Train Accuracy ({CLASS_LABELS[1]})": 100 * acc[1].item(),
-                            f"Train Accuracy ({CLASS_LABELS[2]})": 100 * acc[2].item(),
-                            f"Train F-Score ({CLASS_LABELS[0]})": 100 * score[0].item(),
-                            f"Train F-Score ({CLASS_LABELS[1]})": 100 * score[1].item(),
-                            f"Train F-Score ({CLASS_LABELS[2]})": 100 * score[2].item(),
-                            f"Train Precision ({CLASS_LABELS[0]})": 100
-                            * prec[0].item(),
-                            f"Train Precision ({CLASS_LABELS[1]})": 100
-                            * prec[1].item(),
-                            f"Train Precision ({CLASS_LABELS[2]})": 100
-                            * prec[2].item(),
-                            f"Train Recall ({CLASS_LABELS[0]})": 100 * rec[0].item(),
-                            f"Train Recall ({CLASS_LABELS[1]})": 100 * rec[1].item(),
-                            f"Train Recall ({CLASS_LABELS[2]})": 100 * rec[2].item(),
-                            f"Train IoU ({CLASS_LABELS[0]})": 100 * ious[0].item(),
-                            f"Train IoU ({CLASS_LABELS[1]})": 100 * ious[1].item(),
-                            f"Train IoU ({CLASS_LABELS[2]})": 100 * ious[2].item(),
-                            "Train MeanIoU": mean_iou * 100,
-                            "lr": lr_scheduler.get_last_lr()[0],
-                        }
-                    )
 
         # Update LR scheduler
         lr_scheduler.step()
@@ -243,8 +219,6 @@ def train_semantic_segmentation(
         if miou > best_val:
             print("Epoch: ", epoch)
             print("New best validation mIOU: ", miou)
-            if configs["wandb_activate"]:
-                wandb.log({"Best Validation mIOU": miou})
             print(
                 "Saving model to: ",
                 configs["checkpoint_path"] + "/" + "best_segmentation.pt",
@@ -252,13 +226,15 @@ def train_semantic_segmentation(
             best_val = miou
             best_stats["miou"] = best_val
             best_stats["epoch"] = epoch
-            torch.save(model, configs["checkpoint_path"] + "/" + "best_segmentation.pt")
+            torch.save(model, configs["checkpoint_path"] +
+                       "/" + "best_segmentation.pt")
 
 
 def eval_semantic_segmentation(
     model, loader, configs=None, settype="Test", model_configs=None
 ):
-    accuracy, fscore, precision, recall, iou = initialize_metrics(configs, mode="val")
+    accuracy, fscore, precision, recall, iou = initialize_metrics(
+        configs, mode="val")
     if configs["evaluate_water"]:
         water_fscore = F1Score(
             task="multiclass",
@@ -394,7 +370,8 @@ def eval_semantic_segmentation(
                 ):
                     pre_event = pre_event.to(configs["device"])
                     image = torch.cat((image, pre_event), dim=1)
-                    image = torch.cat((image, pre_event_2.to(configs["device"])), dim=1)
+                    image = torch.cat(
+                        (image, pre_event_2.to(configs["device"])), dim=1)
                     output = model(image)
                 else:
                     print('Invalid configuration for "inputs". Exiting...')
@@ -419,9 +396,12 @@ def eval_semantic_segmentation(
                     first_prediction = predictions.detach().cpu()[0]
 
                     if configs["scale_input"] is not None:
-                        image_scale_vars = [image_scale_var_1[0], image_scale_var_2[0]]
-                        pre_scale_vars = [pre_scale_var_1[0], pre_scale_var_2[0]]
-                        pre2_scale_vars = [pre2_scale_var_1[0], pre2_scale_var_2[0]]
+                        image_scale_vars = [
+                            image_scale_var_1[0], image_scale_var_2[0]]
+                        pre_scale_vars = [
+                            pre_scale_var_1[0], pre_scale_var_2[0]]
+                        pre2_scale_vars = [
+                            pre2_scale_var_1[0], pre2_scale_var_2[0]]
 
                 accuracy(predictions, mask)
                 fscore(predictions, mask)
@@ -445,8 +425,10 @@ def eval_semantic_segmentation(
                         recall_clzone1(
                             predictions[clz == 1, :, :], mask[clz == 1, :, :]
                         )
-                        iou_clzone1(predictions[clz == 1, :, :], mask[clz == 1, :, :])
-                        samples_per_clzone[1] += predictions[clz == 1, :, :].shape[0]
+                        iou_clzone1(
+                            predictions[clz == 1, :, :], mask[clz == 1, :, :])
+                        samples_per_clzone[1] += predictions[clz ==
+                                                             1, :, :].shape[0]
 
                     if 2 in clz_in_batch:
                         accuracy_clzone2(
@@ -461,8 +443,10 @@ def eval_semantic_segmentation(
                         recall_clzone2(
                             predictions[clz == 2, :, :], mask[clz == 2, :, :]
                         )
-                        iou_clzone2(predictions[clz == 2, :, :], mask[clz == 2, :, :])
-                        samples_per_clzone[2] += predictions[clz == 2, :, :].shape[0]
+                        iou_clzone2(
+                            predictions[clz == 2, :, :], mask[clz == 2, :, :])
+                        samples_per_clzone[2] += predictions[clz ==
+                                                             2, :, :].shape[0]
 
                     if 3 in clz_in_batch:
                         accuracy_clzone3(
@@ -477,8 +461,10 @@ def eval_semantic_segmentation(
                         recall_clzone3(
                             predictions[clz == 3, :, :], mask[clz == 3, :, :]
                         )
-                        iou_clzone3(predictions[clz == 3, :, :], mask[clz == 3, :, :])
-                        samples_per_clzone[3] += predictions[clz == 3, :, :].shape[0]
+                        iou_clzone3(
+                            predictions[clz == 3, :, :], mask[clz == 3, :, :])
+                        samples_per_clzone[3] += predictions[clz ==
+                                                             3, :, :].shape[0]
 
                 if configs["log_AOI_metrics"]:
                     activs_in_batch = torch.unique(activ)
@@ -534,7 +520,8 @@ def eval_semantic_segmentation(
 
         first_image = kornia.enhance.adjust_gamma(first_image, gamma=0.3)
         pre_event_wand = kornia.enhance.adjust_gamma(pre_event_wand, gamma=0.3)
-        pre_event_2_wand = kornia.enhance.adjust_gamma(pre_event_2_wand, gamma=0.3)
+        pre_event_2_wand = kornia.enhance.adjust_gamma(
+            pre_event_2_wand, gamma=0.3)
 
         if (
             model_configs["architecture"] == "vivit"
@@ -633,7 +620,8 @@ def eval_semantic_segmentation(
             activ_i_metrics[activ_i]["recall"] = activ_i_metrics_f[
                 3
             ].compute()  # recall
-            activ_i_metrics[activ_i]["iou"] = activ_i_metrics_f[4].compute()  # iou
+            # iou
+            activ_i_metrics[activ_i]["iou"] = activ_i_metrics_f[4].compute()
 
         water_act_metrics = {}
         for activ_i in water_only_metrics.keys():
@@ -646,12 +634,18 @@ def eval_semantic_segmentation(
         print(f"{settype} Accuracy ({CLASS_LABELS[0]}): {100 * acc[0].item()}")
         print(f"{settype} Accuracy ({CLASS_LABELS[1]}): {100 * acc[1].item()}")
         print(f"{settype} Accuracy ({CLASS_LABELS[2]}): {100 * acc[2].item()}")
-        print(f"{settype} F-Score ({CLASS_LABELS[0]}): {100 * score[0].item()}")
-        print(f"{settype} F-Score ({CLASS_LABELS[1]}): {100 * score[1].item()}")
-        print(f"{settype} F-Score ({CLASS_LABELS[2]}): {100 * score[2].item()}")
-        print(f"{settype} Precision ({CLASS_LABELS[0]}): {100 * prec[0].item()}")
-        print(f"{settype} Precision ({CLASS_LABELS[1]}): {100 * prec[1].item()}")
-        print(f"{settype} Precision ({CLASS_LABELS[2]}): {100 * prec[2].item()}")
+        print(
+            f"{settype} F-Score ({CLASS_LABELS[0]}): {100 * score[0].item()}")
+        print(
+            f"{settype} F-Score ({CLASS_LABELS[1]}): {100 * score[1].item()}")
+        print(
+            f"{settype} F-Score ({CLASS_LABELS[2]}): {100 * score[2].item()}")
+        print(
+            f"{settype} Precision ({CLASS_LABELS[0]}): {100 * prec[0].item()}")
+        print(
+            f"{settype} Precision ({CLASS_LABELS[1]}): {100 * prec[1].item()}")
+        print(
+            f"{settype} Precision ({CLASS_LABELS[2]}): {100 * prec[2].item()}")
         print(f"{settype} Recall ({CLASS_LABELS[0]}): {100 * rec[0].item()}")
         print(f"{settype} Recall ({CLASS_LABELS[1]}): {100 * rec[1].item()}")
         print(f"{settype} Recall ({CLASS_LABELS[2]}): {100 * rec[2].item()}")
@@ -665,11 +659,15 @@ def eval_semantic_segmentation(
         if configs["log_zone_metrics"]:
             print(f'\n{"="*20}\n')
             print("Metrics for climatic zone 1")
-            print("Number of samples for climatic zone 1 = ", samples_per_clzone[1])
+            print("Number of samples for climatic zone 1 = ",
+                  samples_per_clzone[1])
             print(f'\n{"="*20}')
-            print(f"{settype} Accuracy ({CLASS_LABELS[0]}): {100 * acc_clz1[0].item()}")
-            print(f"{settype} Accuracy ({CLASS_LABELS[1]}): {100 * acc_clz1[1].item()}")
-            print(f"{settype} Accuracy ({CLASS_LABELS[2]}): {100 * acc_clz1[2].item()}")
+            print(
+                f"{settype} Accuracy ({CLASS_LABELS[0]}): {100 * acc_clz1[0].item()}")
+            print(
+                f"{settype} Accuracy ({CLASS_LABELS[1]}): {100 * acc_clz1[1].item()}")
+            print(
+                f"{settype} Accuracy ({CLASS_LABELS[2]}): {100 * acc_clz1[2].item()}")
             print(
                 f"{settype} F-Score ({CLASS_LABELS[0]}): {100 * score_clz1[0].item()}"
             )
@@ -688,24 +686,34 @@ def eval_semantic_segmentation(
             print(
                 f"{settype} Precision ({CLASS_LABELS[2]}): {100 * prec_clz1[2].item()}"
             )
-            print(f"{settype} Recall ({CLASS_LABELS[0]}): {100 * rec_clz1[0].item()}")
-            print(f"{settype} Recall ({CLASS_LABELS[1]}): {100 * rec_clz1[1].item()}")
-            print(f"{settype} Recall ({CLASS_LABELS[2]}): {100 * rec_clz1[2].item()}")
-            print(f"{settype} IoU ({CLASS_LABELS[0]}): {100 * ious_clz1[0].item()}")
-            print(f"{settype} IoU ({CLASS_LABELS[1]}): {100 * ious_clz1[1].item()}")
-            print(f"{settype} IoU ({CLASS_LABELS[2]}): {100 * ious_clz1[2].item()}")
+            print(
+                f"{settype} Recall ({CLASS_LABELS[0]}): {100 * rec_clz1[0].item()}")
+            print(
+                f"{settype} Recall ({CLASS_LABELS[1]}): {100 * rec_clz1[1].item()}")
+            print(
+                f"{settype} Recall ({CLASS_LABELS[2]}): {100 * rec_clz1[2].item()}")
+            print(
+                f"{settype} IoU ({CLASS_LABELS[0]}): {100 * ious_clz1[0].item()}")
+            print(
+                f"{settype} IoU ({CLASS_LABELS[1]}): {100 * ious_clz1[1].item()}")
+            print(
+                f"{settype} IoU ({CLASS_LABELS[2]}): {100 * ious_clz1[2].item()}")
             print(f"{settype} MeanIoU: {mean_iou_clz1 * 100}")
 
             print(f'\n{"="*20}')
 
             print(f'\n{"="*20}\n')
             print("Metrics for climatic zone 2")
-            print("Number of samples for climatic zone 2 = ", samples_per_clzone[2])
+            print("Number of samples for climatic zone 2 = ",
+                  samples_per_clzone[2])
 
             print(f'\n{"="*20}')
-            print(f"{settype} Accuracy ({CLASS_LABELS[0]}): {100 * acc_clz2[0].item()}")
-            print(f"{settype} Accuracy ({CLASS_LABELS[1]}): {100 * acc_clz2[1].item()}")
-            print(f"{settype} Accuracy ({CLASS_LABELS[2]}): {100 * acc_clz2[2].item()}")
+            print(
+                f"{settype} Accuracy ({CLASS_LABELS[0]}): {100 * acc_clz2[0].item()}")
+            print(
+                f"{settype} Accuracy ({CLASS_LABELS[1]}): {100 * acc_clz2[1].item()}")
+            print(
+                f"{settype} Accuracy ({CLASS_LABELS[2]}): {100 * acc_clz2[2].item()}")
             print(
                 f"{settype} F-Score ({CLASS_LABELS[0]}): {100 * score_clz2[0].item()}"
             )
@@ -724,24 +732,34 @@ def eval_semantic_segmentation(
             print(
                 f"{settype} Precision ({CLASS_LABELS[2]}): {100 * prec_clz2[2].item()}"
             )
-            print(f"{settype} Recall ({CLASS_LABELS[0]}): {100 * rec_clz2[0].item()}")
-            print(f"{settype} Recall ({CLASS_LABELS[1]}): {100 * rec_clz2[1].item()}")
-            print(f"{settype} Recall ({CLASS_LABELS[2]}): {100 * rec_clz2[2].item()}")
-            print(f"{settype} IoU ({CLASS_LABELS[0]}): {100 * ious_clz2[0].item()}")
-            print(f"{settype} IoU ({CLASS_LABELS[1]}): {100 * ious_clz2[1].item()}")
-            print(f"{settype} IoU ({CLASS_LABELS[2]}): {100 * ious_clz2[2].item()}")
+            print(
+                f"{settype} Recall ({CLASS_LABELS[0]}): {100 * rec_clz2[0].item()}")
+            print(
+                f"{settype} Recall ({CLASS_LABELS[1]}): {100 * rec_clz2[1].item()}")
+            print(
+                f"{settype} Recall ({CLASS_LABELS[2]}): {100 * rec_clz2[2].item()}")
+            print(
+                f"{settype} IoU ({CLASS_LABELS[0]}): {100 * ious_clz2[0].item()}")
+            print(
+                f"{settype} IoU ({CLASS_LABELS[1]}): {100 * ious_clz2[1].item()}")
+            print(
+                f"{settype} IoU ({CLASS_LABELS[2]}): {100 * ious_clz2[2].item()}")
             print(f"{settype} MeanIoU: {mean_iou_clz2 * 100}")
 
             print(f'\n{"="*20}')
 
             print(f'\n{"="*20}\n')
             print("Metrics for climatic zone 3")
-            print("Number of samples for climatic zone 3 = ", samples_per_clzone[3])
+            print("Number of samples for climatic zone 3 = ",
+                  samples_per_clzone[3])
 
             print(f'\n{"="*20}')
-            print(f"{settype} Accuracy ({CLASS_LABELS[0]}): {100 * acc_clz3[0].item()}")
-            print(f"{settype} Accuracy ({CLASS_LABELS[1]}): {100 * acc_clz3[1].item()}")
-            print(f"{settype} Accuracy ({CLASS_LABELS[2]}): {100 * acc_clz3[2].item()}")
+            print(
+                f"{settype} Accuracy ({CLASS_LABELS[0]}): {100 * acc_clz3[0].item()}")
+            print(
+                f"{settype} Accuracy ({CLASS_LABELS[1]}): {100 * acc_clz3[1].item()}")
+            print(
+                f"{settype} Accuracy ({CLASS_LABELS[2]}): {100 * acc_clz3[2].item()}")
             print(
                 f"{settype} F-Score ({CLASS_LABELS[0]}): {100 * score_clz3[0].item()}"
             )
@@ -760,12 +778,18 @@ def eval_semantic_segmentation(
             print(
                 f"{settype} Precision ({CLASS_LABELS[2]}): {100 * prec_clz3[2].item()}"
             )
-            print(f"{settype} Recall ({CLASS_LABELS[0]}): {100 * rec_clz3[0].item()}")
-            print(f"{settype} Recall ({CLASS_LABELS[1]}): {100 * rec_clz3[1].item()}")
-            print(f"{settype} Recall ({CLASS_LABELS[2]}): {100 * rec_clz3[2].item()}")
-            print(f"{settype} IoU ({CLASS_LABELS[0]}): {100 * ious_clz3[0].item()}")
-            print(f"{settype} IoU ({CLASS_LABELS[1]}): {100 * ious_clz3[1].item()}")
-            print(f"{settype} IoU ({CLASS_LABELS[2]}): {100 * ious_clz3[2].item()}")
+            print(
+                f"{settype} Recall ({CLASS_LABELS[0]}): {100 * rec_clz3[0].item()}")
+            print(
+                f"{settype} Recall ({CLASS_LABELS[1]}): {100 * rec_clz3[1].item()}")
+            print(
+                f"{settype} Recall ({CLASS_LABELS[2]}): {100 * rec_clz3[2].item()}")
+            print(
+                f"{settype} IoU ({CLASS_LABELS[0]}): {100 * ious_clz3[0].item()}")
+            print(
+                f"{settype} IoU ({CLASS_LABELS[1]}): {100 * ious_clz3[1].item()}")
+            print(
+                f"{settype} IoU ({CLASS_LABELS[2]}): {100 * ious_clz3[2].item()}")
             print(f"{settype} MeanIoU: {mean_iou_clz3 * 100}")
 
             print(f'\n{"="*20}')
