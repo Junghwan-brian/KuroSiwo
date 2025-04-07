@@ -44,6 +44,8 @@ def create_checkpoint_directory(configs, model_configs):
                 + str(len(configs["inputs"]))
                 + "/"
                 + configs["track"]
+                + "/"
+                + configs['loss_function']
             )
         else:
             checkpoint_path = base_path + \
