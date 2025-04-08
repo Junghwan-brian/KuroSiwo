@@ -7,17 +7,20 @@ class FileLogger:
         self.log_file = log_file
         self.log_level = log_level
         self.logger = logging.getLogger(os.path.basename(log_file))
+        self.logger.propagate = False
         self._configure_logger()
 
     def _configure_logger(self):
         # Ensure the logger is not configured multiple times
         if not self.logger.hasHandlers():
-            self.logger.setLevel(self.log_level)
-            file_handler = logging.FileHandler(self.log_file)
-            formatter = logging.Formatter(
-                '%(asctime)s - %(levelname)s - %(message)s')
-            file_handler.setFormatter(formatter)
-            self.logger.addHandler(file_handler)
+            self.logger.handlers.clear()
+
+        self.logger.setLevel(self.log_level)
+        file_handler = logging.FileHandler(self.log_file)
+        formatter = logging.Formatter(
+            '%(asctime)s - %(levelname)s - %(message)s')
+        file_handler.setFormatter(formatter)
+        self.logger.addHandler(file_handler)
 
     def log(self, message):
         self.logger.info(message)
@@ -27,4 +30,4 @@ class FileLogger:
 
 # Example usage:
 # logger = FileLogger('/path/to/logfile.log')
-# logger.log('info', 'This is an info message.')
+# logger.log('This is an info message.')
