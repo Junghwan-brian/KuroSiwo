@@ -35,8 +35,6 @@ def train_contrastive_semantic_segmentation(
     logger.log("Training started")
 
     num_classes = len(CLASS_LABELS) - 1
-    sample_anchor_per_class = 10
-    sample_anchor = 10
 
     model.to(configs["device"])
     best_val = 0.0
@@ -48,8 +46,6 @@ def train_contrastive_semantic_segmentation(
 
     for epoch in range(configs["epochs"]):
         model.train()
-
-        train_loss = 0.0
 
         for index, batch in tqdm(
             enumerate(train_loader),
@@ -94,23 +90,16 @@ def train_contrastive_semantic_segmentation(
 
                 # 전체 배치에 대해 contrastive loss 계산
                 for b in range(B):
-                    # (A) Changed Contrastive Loss: pre_event1에서 Permanent Waters(1) -> post_event에서 Floods(2)
-                    changed_loss_sum += changed_contrastive_loss(feat_pre1_up[b], feat_pre2_up[b], feat_post_up[b],
-                                                                 mask[b], temperature=0.07, sample_anchor=sample_anchor)
+                    # (A) Changed Contrastive Loss: pre_event1에서 no water (0) -> post_event에서 Floods(2)
+                    changed_loss_sum += changed_contrastive_loss_region(feat_pre1_up[b], feat_pre2_up[b], feat_post_up[b],
+                                                                        mask[b], temperature=0.07)
                     # (B) Global Contrastive Loss: 세 시점의 feature concat
                     global_feat = torch.cat([feat_pre1_up[b].unsqueeze(0),
                                             feat_pre2_up[b].unsqueeze(0),
                                             feat_post_up[b].unsqueeze(0)], dim=1).squeeze(0)  # [192, H, W]
-                    # BANE sampling: post-event 예측 결과를 사용 (각 이미지 별)
-                    post_pred = torch.argmax(F.interpolate(logits[b].unsqueeze(0),
-                                                           size=(
-                                                               mask.shape[1], mask.shape[2]),
-                                                           mode='bilinear', align_corners=True), dim=1)  # [1,H,W]
-                    bane_neg = bane_sampling_single_image(
-                        post_pred[0], mask[b], num_classes, ratio_k=0.5)
-                    global_loss_sum += global_contrastive_loss(global_feat, mask[b], bane_neg,
-                                                               num_classes=num_classes, temperature=0.07,
-                                                               sample_anchor_per_class=sample_anchor_per_class)
+                    global_loss_sum += global_contrastive_loss_region(global_feat, mask[b],
+                                                                      num_classes=num_classes, temperature=0.07,
+                                                                      )
 
                 changed_loss_avg = changed_loss_sum / B
                 global_loss_avg = global_loss_sum / B
@@ -165,12 +154,12 @@ def train_contrastive_semantic_segmentation(
         )
 
         if miou > best_val:
-            logger.print("Epoch: ", epoch)
-            logger.print("New best validation mIOU: ", miou)
-            logger.print(
-                "Saving model to: ",
-                configs["checkpoint_path"] + "/" + "best_segmentation.pt",
-            )
+            logger.print(f"Epoch: {epoch}")
+            logger.print(f"New best validation mIOU: {miou}")
+            # logger.print(
+            #     "Saving model to: ",
+            #     configs["checkpoint_path"] + "/" + "best_segmentation.pt",
+            # )
             best_val = miou
             best_stats["miou"] = best_val
             best_stats["epoch"] = epoch
@@ -240,92 +229,126 @@ def bane_sampling_single_image(
     return neg_indices
 
 
-def changed_contrastive_loss(feat_pre1, feat_pre2, feat_post, post_label, temperature=0.07, sample_anchor=100):
+def changed_contrastive_loss_region(
+    feat_pre1: torch.Tensor,  # [C, H, W]
+    feat_pre2: torch.Tensor,  # [C, H, W]
+    feat_post: torch.Tensor,  # [C, H, W]
+    post_label: torch.Tensor,  # [H, W], 값=0,1,2,3 등
+    temperature: float = 0.07
+) -> torch.Tensor:
     """
-    변화를 나타내는 픽셀 (no water -> Floods)에 대해 InfoNCE 스타일 contrastive loss 계산.
-    가정: 클래스: 0:"No water", 1:"Permanent Waters", 2:"Floods", 3:"Invalid pixels"
-    변화 영역: pre_event1에서 'no water'(0)이고, post_event에서 'Floods'(2)인 픽셀.
+    Region-aware Changed Contrastive:
+      - post_label==2('Floods')인 영역 픽셀을 하나의 region으로 보고,
+      - 그 영역의 pre1, pre2, post의 feature들을 각각 평균내어 3개의 centroid를 만든 후,
+      - post centroid(anchor)와 pre1, pre2 centroid dot product를 계산.
+      - 유사도가 높으면(즉 dot가 크면) penalty를 주도록(원래 코드 논리에 맞춰) => negative처럼 동작
 
-    각 changed 픽셀 위치에서 세 시점의 동일 위치 임베딩을 양성으로 간주하여 loss 계산.
-    (여기서는 negatives는 고려하지 않는 단순 버전)
-
-    feat_*: [C, H, W] (upsample된 contrastive feature)
-    post_label: [H, W]
+    Returns:
+      scalar: contrastive loss (float tensor)
     """
-    changed_mask = ((post_label == 2))
-    if changed_mask.sum() == 0:
+
+    # 1) changed_mask: post_label이 2('Floods')인 영역
+    changed_mask = (post_label == 2)
+    num_pixels = changed_mask.sum()
+    if num_pixels.item() == 0:
         return torch.tensor(0.0, device=feat_pre1.device)
-    coords = torch.stack(torch.where(changed_mask), dim=1)  # [N,2]
-    N = coords.shape[0]
-    if N > sample_anchor:
-        perm = torch.randperm(N)[:sample_anchor]
-        coords = coords[perm]
-        N = sample_anchor
-    loss = 0.0
-    for (i, j) in coords:
-        anchor = feat_post[:, i, j]
-        pos1 = feat_pre1[:, i, j]
-        pos2 = feat_pre2[:, i, j]
-        # 유사도가 높을수록 (즉, dot product가 크면) loss가 커지도록 함
-        sim1 = torch.dot(anchor, pos1) / temperature
-        sim2 = torch.dot(anchor, pos2) / temperature
-        loss_anchor = (sim1 + sim2) / 2.0
-        loss += loss_anchor
-    return loss / N
+
+    # 2) region-level 임베딩 계산
+    #    changed_mask 위치의 feature를 평균 => centroid
+    #    feat_* = [C, H, W], boolean mask = [H, W]
+    #    => masked_select 후 view -> mean
+    #    shape: [C, ~]
+    feat_pre1_region = feat_pre1[:, changed_mask]  # shape [C, #pixels_in_mask]
+    feat_pre2_region = feat_pre2[:, changed_mask]
+    feat_post_region = feat_post[:, changed_mask]
+
+    # 평균 -> centroid
+    centroid_pre1 = feat_pre1_region.mean(dim=1)  # shape [C]
+    centroid_pre2 = feat_pre2_region.mean(dim=1)  # shape [C]
+    centroid_post = feat_post_region.mean(dim=1)  # shape [C]
+
+    # 3) dot product
+    # 원래 코드상: dot이 클수록 loss가 커진다 => negative 관계
+    sim1 = torch.dot(centroid_post, centroid_pre1) / temperature
+    sim2 = torch.dot(centroid_post, centroid_pre2) / temperature
+    # 최종 loss = sim1 + sim2
+    # (값이 클수록 penalty => loss = sim1 + sim2)
+    # 필요하다면 loss_anchor = sim1 + sim2, => total_loss = loss_anchor
+    loss = sim1 + sim2
+
+    return loss/2
 
 
-def global_contrastive_loss(global_feat, gt, bane_neg_fn, num_classes, temperature=0.07, sample_anchor_per_class=50):
+def global_contrastive_loss_region(
+    global_feat: torch.Tensor,  # [C_global, H, W]
+    gt: torch.Tensor,           # [H, W]
+    num_classes: int = 4,
+    temperature: float = 0.07,
+) -> torch.Tensor:
     """
-    global_feat: [C_global, H, W] – 세 시점의 contrastive feature를 concat한 결과 ([192, H, W] if each is 64-dim)
-    gt: [H, W] – ground truth (post-event 기준)
-    bane_neg_fn: BANE sampling 결과 (dict {class: Tensor([K,2])})
+    Region-Aware Global Contrastive:
+      1) 클래스별로 픽셀을 모아 평균 임베딩(centroid) 계산
+      2) 같은 클래스끼리는 '양성'(pos), 다른 클래스는 '음성'(neg)으로 보고 InfoNCE 형태로 계산
+      3) invalid pixel(3)은 제외
 
-    각 클래스별로 일정 수의 anchor 픽셀을 균등하게 샘플링하여, 
-    해당 클래스의 양성 집합과 BANE로 선정된 네거티브 집합을 사용해 InfoNCE loss를 계산합니다.
+    Returns:
+      scalar: contrastive loss (float tensor)
     """
-    loss = 0.0
-    count = 0
-    for cls_ in range(num_classes):
-        # invalid pixels(3)는 계산에서 제외
-        if cls_ == 3:
-            continue
-        class_mask = (gt == cls_)
-        coords = torch.stack(torch.where(class_mask), dim=1)  # [N,2]
-        if coords.shape[0] == 0:
-            continue
-        N = coords.shape[0]
-        if N > sample_anchor_per_class:
-            perm = torch.randperm(N)[:sample_anchor_per_class]
-            class_coords = coords[perm]
-        else:
-            class_coords = coords
 
-        for (i, j) in class_coords:
-            anchor_feat = global_feat[:, i, j]
-            pos_coords = torch.stack(torch.where(class_mask), dim=1)
-            if pos_coords.shape[0] < 2:
-                continue
-            pos_feats = global_feat[:, pos_coords[:, 0], pos_coords[:, 1]]
-            neg_coords_list = []
-            for c, neg_coords in bane_neg_fn.items():
-                if c != cls_ and c != 3 and neg_coords.shape[0] > 0:
-                    neg_coords_list.append(neg_coords)
-            if len(neg_coords_list) == 0:
-                continue
-            neg_coords = torch.cat(neg_coords_list, dim=0)
-            neg_feats = global_feat[:, neg_coords[:, 0], neg_coords[:, 1]]
-            anchor_feat_2d = anchor_feat.unsqueeze(1)
-            pos_dot = torch.mm(anchor_feat_2d.t(), pos_feats) / \
-                temperature  # [1, P]
-            neg_dot = torch.mm(anchor_feat_2d.t(), neg_feats) / \
-                temperature  # [1, N_neg]
-            pos_exp = torch.exp(pos_dot)
-            neg_exp = torch.exp(neg_dot)
-            loss_anchor = -torch.log((pos_exp.sum() + 1e-10) /
-                                     (pos_exp.sum() + neg_exp.sum() + 1e-10))
-            loss += loss_anchor
-            count += 1
-    return loss / count if count > 0 else torch.tensor(0.0, device=global_feat.device)
+    device = global_feat.device
+    C, H, W = global_feat.shape
+
+    # 1) 클래스별 centroid 계산
+    class_centroids = {}
+    for cls_id in range(num_classes):
+        if cls_id == 3:
+            continue  # invalid pixel은 제외
+        mask = (gt == cls_id)
+        count = mask.sum()
+        if count.item() == 0:
+            continue
+        # region_aware feat mean => centroid
+        feat_region = global_feat[:, mask]  # shape [C, #pixels_in_that_class]
+        centroid = feat_region.mean(dim=1)  # shape [C]
+        class_centroids[cls_id] = centroid
+
+    # 클래스가 1개 이하라면 contrastive 계산 불가
+    if len(class_centroids) < 2:
+        return torch.tensor(0.0, device=device)
+
+    # 2) InfoNCE-ish 계산
+    #    for each cls => anchor=centroid[clsA], pos=centroid[clsA], neg=다른 cls centroid
+    loss = 0.0
+    count_pair = 0
+    items = list(class_centroids.items())  # [(cls_id, centroid), ...]
+
+    for i, (clsA, anchor) in enumerate(items):
+        pos_dot_sum = 0.0
+        neg_dot_sum = 0.0
+        pos_count = 1  # 자기 자신이 pos
+        neg_count = 0
+        for j, (clsB, other) in enumerate(items):
+            sim = anchor.dot(other) / temperature
+            if clsA == clsB:
+                # 같은 클래스는 양성
+                pos_dot_sum += torch.exp(sim)
+            else:
+                # 다른 클래스는 음성
+                neg_dot_sum += torch.exp(sim)
+                neg_count += 1
+
+        # InfoNCE: log( pos / (pos+neg) )
+        if neg_count > 0:
+            numerator = pos_dot_sum + 1e-10
+            denominator = pos_dot_sum + neg_dot_sum + 1e-10
+            loss_cls = -torch.log(numerator / denominator)
+            loss += loss_cls
+            count_pair += 1
+
+    if count_pair == 0:
+        return torch.tensor(0.0, device=device)
+
+    return loss / count_pair
 
 
 def eval_contrastive_semantic_segmentation(
