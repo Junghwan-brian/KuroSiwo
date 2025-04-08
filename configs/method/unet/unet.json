@@ -6,6 +6,6 @@
     "lr_schedule": "cosine",
     "architecture": "UNet",
     "backbone": "resnet34",
-    "pretrained": false,
-    "encoder_weights": null // imagenet
+    "pretrained": true,
+    "encoder_weights": "imagenet" //"imagenet"
 }

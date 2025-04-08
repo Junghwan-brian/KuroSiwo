@@ -30,7 +30,7 @@ def train_semantic_segmentation(
     )
     global logger
     logger = FileLogger(configs['checkpoint_path'] + '/train.log')
-    logger.info("Training started")
+    logger.log("Training started")
 
     model.to(configs["device"])
     best_val = 0.0

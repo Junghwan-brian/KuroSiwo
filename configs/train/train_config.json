@@ -1,6 +1,6 @@
 {
     "batch_size": 128,
-    "epochs": 100,
+    "epochs": 20,
     "num_workers": 8,
     "start_epoch": 0,
     "print_frequency": 10,
