@@ -11,6 +11,7 @@ from tqdm import tqdm
 
 from models.model_utilities import *
 from utilities.utilities import *
+from utilities.logger import FileLogger
 
 CLASS_LABELS = {0: "No water", 1: "Permanent Waters",
                 2: "Floods", 3: "Invalid pixels"}
@@ -29,6 +30,9 @@ def train_contrastive_semantic_segmentation(
     lr_scheduler = init_lr_scheduler(  # TODO SAM optimizer 추가 테스트.
         optimizer, configs, model_configs, steps=len(train_loader)
     )
+    global logger
+    logger = FileLogger(configs['checkpoint_path'] + '/train.log')
+    logger.info("Training started")
 
     num_classes = len(CLASS_LABELS) - 1
     sample_anchor_per_class = 10
@@ -111,7 +115,7 @@ def train_contrastive_semantic_segmentation(
                 changed_loss_avg = changed_loss_sum / B
                 global_loss_avg = global_loss_sum / B
 
-                total_loss = ce_loss + 0.01*changed_loss_avg + 0.5*global_loss_avg
+                total_loss = ce_loss + 0.005*changed_loss_avg + 0.1*global_loss_avg
 
             if configs["mixed_precision"]:
                 scaler.scale(total_loss).backward()
@@ -129,24 +133,26 @@ def train_contrastive_semantic_segmentation(
             mean_iou = (ious[0] + ious[1] + ious[2]) / 3
 
             if index % configs["print_frequency"] == 0 and configs["on_screen_prints"]:
-                print(
+                logger.print(
                     f"Epoch: {epoch}, Iteration: {index}, Train Loss: {total_loss.item()}")
                 for i, label in CLASS_LABELS.items():
                     if i == 3:
                         continue
-                    print(
+                    logger.print(
                         f"Train Accuracy ({label}): {100 * acc[i].item()}")
-                    print(
+                    logger.print(
                         f"Train F-Score ({label}): {100 * score[i].item()}")
-                    print(
+                    logger.print(
                         f"Train Precision ({label}): {100 * prec[i].item()}")
-                    print(f"Train Recall ({label}): {100 * rec[i].item()}")
-                    print(f"Train IoU ({label}): {100 * ious[i].item()}")
-                print(f"Train MeanIoU: {mean_iou * 100}")
-                print(f"lr: {lr_scheduler.get_last_lr()[0]}")
+                    logger.print(
+                        f"Train Recall ({label}): {100 * rec[i].item()}")
+                    logger.print(
+                        f"Train IoU ({label}): {100 * ious[i].item()}")
+                logger.print(f"Train MeanIoU: {mean_iou * 100}")
+                logger.print(f"lr: {lr_scheduler.get_last_lr()[0]}")
 
-        # Update LR scheduler
-        lr_scheduler.step()
+            # Update LR scheduler
+            lr_scheduler.step()
 
         # Evaluate on validation set
         model.eval()
@@ -159,9 +165,9 @@ def train_contrastive_semantic_segmentation(
         )
 
         if miou > best_val:
-            print("Epoch: ", epoch)
-            print("New best validation mIOU: ", miou)
-            print(
+            logger.print("Epoch: ", epoch)
+            logger.print("New best validation mIOU: ", miou)
+            logger.print(
                 "Saving model to: ",
                 configs["checkpoint_path"] + "/" + "best_segmentation.pt",
             )
@@ -668,25 +674,25 @@ def eval_contrastive_semantic_segmentation(
     if configs["on_screen_prints"]:
         def print_metrics(prefix, metrics, labels):
             for i, label in labels.items():
-                print(f"{prefix} {label}: {100 * metrics[i].item()}")
+                logger.print(f"{prefix} {label}: {100 * metrics[i].item()}")
 
-        print(f'\n{"="*20}')
-        print(f"{settype} Loss: {val_loss}")
+        logger.print(f'\n{"="*20}')
+        logger.print(f"{settype} Loss: {val_loss}")
         print_metrics(f"{settype} Accuracy", acc, CLASS_LABELS)
         print_metrics(f"{settype} F-Score", score, CLASS_LABELS)
         print_metrics(f"{settype} Precision", prec, CLASS_LABELS)
         print_metrics(f"{settype} Recall", rec, CLASS_LABELS)
         print_metrics(f"{settype} IoU", ious, CLASS_LABELS)
-        print(f"{settype} MeanIoU: {mean_iou * 100}")
-        print(f'\n{"="*20}')
+        logger.print(f"{settype} MeanIoU: {mean_iou * 100}")
+        logger.print(f'\n{"="*20}')
 
         if configs["log_zone_metrics"]:
             for zone in range(1, 4):
-                print(f'\n{"="*20}\n')
-                print(f"Metrics for climatic zone {zone}")
-                print(
+                logger.print(f'\n{"="*20}\n')
+                logger.print(f"Metrics for climatic zone {zone}")
+                logger.print(
                     f"Number of samples for climatic zone {zone} = {samples_per_clzone[zone]}")
-                print(f'\n{"="*20}')
+                logger.print(f'\n{"="*20}')
                 zone_metrics = eval(
                     f"acc_clz{zone}, score_clz{zone}, prec_clz{zone}, rec_clz{zone}, ious_clz{zone}, mean_iou_clz{zone}")
                 print_metrics(f"{settype} Accuracy",
@@ -698,14 +704,14 @@ def eval_contrastive_semantic_segmentation(
                 print_metrics(f"{settype} Recall",
                               zone_metrics[3], CLASS_LABELS)
                 print_metrics(f"{settype} IoU", zone_metrics[4], CLASS_LABELS)
-                print(f"{settype} MeanIoU: {zone_metrics[5] * 100}")
-                print(f'\n{"="*20}')
+                logger.print(f"{settype} MeanIoU: {zone_metrics[5] * 100}")
+                logger.print(f'\n{"="*20}')
 
         if configs["log_AOI_metrics"]:
             for activ_i, activ_i_metrics_list in activ_i_metrics.items():
-                print(f'\n{"="*20}\n')
-                print(f"Metrics for AOI {activ_i}")
-                print(f'\n{"="*20}')
+                logger.print(f'\n{"="*20}\n')
+                logger.print(f"Metrics for AOI {activ_i}")
+                logger.print(f'\n{"="*20}')
                 print_metrics(f'{settype} AOI {activ_i} Accuracy',
                               activ_i_metrics_list["accuracy"], CLASS_LABELS)
                 print_metrics(f'{settype} AOI {activ_i} F-Score',
@@ -716,8 +722,8 @@ def eval_contrastive_semantic_segmentation(
                               activ_i_metrics_list["recall"], CLASS_LABELS)
                 print_metrics(f'{settype} AOI {activ_i} IoU',
                               activ_i_metrics_list["iou"], CLASS_LABELS)
-                print(
+                logger.print(
                     f'{settype} AOI {activ_i} MeanIoU: {activ_i_metrics_list["iou"][:3].mean() * 100}')
-                print(f'\n{"="*20}')
+                logger.print(f'\n{"="*20}')
 
     return 100 * acc, 100 * score[:3].mean(), 100 * mean_iou

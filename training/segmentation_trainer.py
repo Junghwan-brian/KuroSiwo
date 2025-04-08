@@ -9,6 +9,7 @@ from tqdm import tqdm
 
 from models.model_utilities import *
 from utilities.utilities import *
+from utilities.logger import FileLogger
 
 CLASS_LABELS = {0: "No water", 1: "Permanent Waters",
                 2: "Floods", 3: "Invalid pixels"}
@@ -27,6 +28,9 @@ def train_semantic_segmentation(
     lr_scheduler = init_lr_scheduler(
         optimizer, configs, model_configs, steps=len(train_loader)
     )
+    global logger
+    logger = FileLogger(configs['checkpoint_path'] + '/train.log')
+    logger.info("Training started")
 
     model.to(configs["device"])
     best_val = 0.0
@@ -135,7 +139,8 @@ def train_semantic_segmentation(
                         (image, pre_event_2.to(configs["device"])), dim=1)
                     output = model(image)
                 else:
-                    print('Invalid configuration for "inputs". Exiting...')
+                    logger.print(
+                        'Invalid configuration for "inputs". Exiting...')
                     exit(1)
 
                 if configs["method"] == "contrastive":
@@ -164,47 +169,47 @@ def train_semantic_segmentation(
 
             if index % configs["print_frequency"] == 0:
                 if configs["on_screen_prints"]:
-                    print(f"Epoch: {epoch}")
-                    print(f"Iteration: {index}")
-                    print(f"Train Loss: {loss.item()}")
-                    print(
+                    logger.print(f"Epoch: {epoch}")
+                    logger.print(f"Iteration: {index}")
+                    logger.print(f"Train Loss: {loss.item()}")
+                    logger.print(
                         f"Train Accuracy ({CLASS_LABELS[0]}): {100 * acc[0].item()}")
-                    print(
+                    logger.print(
                         f"Train Accuracy ({CLASS_LABELS[1]}): {100 * acc[1].item()}")
-                    print(
+                    logger.print(
                         f"Train Accuracy ({CLASS_LABELS[2]}): {100 * acc[2].item()}")
-                    print(
+                    logger.print(
                         f"Train F-Score ({CLASS_LABELS[0]}): {100 * score[0].item()}")
-                    print(
+                    logger.print(
                         f"Train F-Score ({CLASS_LABELS[1]}): {100 * score[1].item()}")
-                    print(
+                    logger.print(
                         f"Train F-Score ({CLASS_LABELS[2]}): {100 * score[2].item()}")
-                    print(
+                    logger.print(
                         f"Train Precision ({CLASS_LABELS[0]}): {100 * prec[0].item()}"
                     )
-                    print(
+                    logger.print(
                         f"Train Precision ({CLASS_LABELS[1]}): {100 * prec[1].item()}"
                     )
-                    print(
+                    logger.print(
                         f"Train Precision ({CLASS_LABELS[2]}): {100 * prec[2].item()}"
                     )
-                    print(
+                    logger.print(
                         f"Train Recall ({CLASS_LABELS[0]}): {100 * rec[0].item()}")
-                    print(
+                    logger.print(
                         f"Train Recall ({CLASS_LABELS[1]}): {100 * rec[1].item()}")
-                    print(
+                    logger.print(
                         f"Train Recall ({CLASS_LABELS[2]}): {100 * rec[2].item()}")
-                    print(
+                    logger.print(
                         f"Train IoU ({CLASS_LABELS[0]}): {100 * ious[0].item()}")
-                    print(
+                    logger.print(
                         f"Train IoU ({CLASS_LABELS[1]}): {100 * ious[1].item()}")
-                    print(
+                    logger.print(
                         f"Train IoU ({CLASS_LABELS[2]}): {100 * ious[2].item()}")
-                    print(f"Train MeanIoU: {mean_iou * 100}")
-                    print(f"lr: {lr_scheduler.get_last_lr()[0]}")
+                    logger.print(f"Train MeanIoU: {mean_iou * 100}")
+                    logger.print(f"lr: {lr_scheduler.get_last_lr()[0]}")
 
-        # Update LR scheduler
-        lr_scheduler.step()
+            # Update LR scheduler
+            lr_scheduler.step()
 
         # Evaluate on validation set
         model.eval()
@@ -217,9 +222,9 @@ def train_semantic_segmentation(
         )
 
         if miou > best_val:
-            print("Epoch: ", epoch)
-            print("New best validation mIOU: ", miou)
-            print(
+            logger.print("Epoch: ", epoch)
+            logger.print("New best validation mIOU: ", miou)
+            logger.print(
                 "Saving model to: ",
                 configs["checkpoint_path"] + "/" + "best_segmentation.pt",
             )
@@ -374,7 +379,8 @@ def eval_semantic_segmentation(
                         (image, pre_event_2.to(configs["device"])), dim=1)
                     output = model(image)
                 else:
-                    print('Invalid configuration for "inputs". Exiting...')
+                    logger.print(
+                        'Invalid configuration for "inputs". Exiting...')
                     exit(1)
 
                 loss = criterion(output, mask)
@@ -628,227 +634,236 @@ def eval_semantic_segmentation(
             water_act_metrics[activ_i] = water_only_metrics[activ_i].compute()
 
     if configs["on_screen_prints"]:
-        print(f'\n{"="*20}')
+        logger.print(f'\n{"="*20}')
 
-        print(f"{settype} Loss: {val_loss}")
-        print(f"{settype} Accuracy ({CLASS_LABELS[0]}): {100 * acc[0].item()}")
-        print(f"{settype} Accuracy ({CLASS_LABELS[1]}): {100 * acc[1].item()}")
-        print(f"{settype} Accuracy ({CLASS_LABELS[2]}): {100 * acc[2].item()}")
-        print(
+        logger.print(f"{settype} Loss: {val_loss}")
+        logger.print(
+            f"{settype} Accuracy ({CLASS_LABELS[0]}): {100 * acc[0].item()}")
+        logger.print(
+            f"{settype} Accuracy ({CLASS_LABELS[1]}): {100 * acc[1].item()}")
+        logger.print(
+            f"{settype} Accuracy ({CLASS_LABELS[2]}): {100 * acc[2].item()}")
+        logger.print(
             f"{settype} F-Score ({CLASS_LABELS[0]}): {100 * score[0].item()}")
-        print(
+        logger.print(
             f"{settype} F-Score ({CLASS_LABELS[1]}): {100 * score[1].item()}")
-        print(
+        logger.print(
             f"{settype} F-Score ({CLASS_LABELS[2]}): {100 * score[2].item()}")
-        print(
+        logger.print(
             f"{settype} Precision ({CLASS_LABELS[0]}): {100 * prec[0].item()}")
-        print(
+        logger.print(
             f"{settype} Precision ({CLASS_LABELS[1]}): {100 * prec[1].item()}")
-        print(
+        logger.print(
             f"{settype} Precision ({CLASS_LABELS[2]}): {100 * prec[2].item()}")
-        print(f"{settype} Recall ({CLASS_LABELS[0]}): {100 * rec[0].item()}")
-        print(f"{settype} Recall ({CLASS_LABELS[1]}): {100 * rec[1].item()}")
-        print(f"{settype} Recall ({CLASS_LABELS[2]}): {100 * rec[2].item()}")
-        print(f"{settype} IoU ({CLASS_LABELS[0]}): {100 * ious[0].item()}")
-        print(f"{settype} IoU ({CLASS_LABELS[1]}): {100 * ious[1].item()}")
-        print(f"{settype} IoU ({CLASS_LABELS[2]}): {100 * ious[2].item()}")
-        print(f"{settype} MeanIoU: {mean_iou * 100}")
+        logger.print(
+            f"{settype} Recall ({CLASS_LABELS[0]}): {100 * rec[0].item()}")
+        logger.print(
+            f"{settype} Recall ({CLASS_LABELS[1]}): {100 * rec[1].item()}")
+        logger.print(
+            f"{settype} Recall ({CLASS_LABELS[2]}): {100 * rec[2].item()}")
+        logger.print(
+            f"{settype} IoU ({CLASS_LABELS[0]}): {100 * ious[0].item()}")
+        logger.print(
+            f"{settype} IoU ({CLASS_LABELS[1]}): {100 * ious[1].item()}")
+        logger.print(
+            f"{settype} IoU ({CLASS_LABELS[2]}): {100 * ious[2].item()}")
+        logger.print(f"{settype} MeanIoU: {mean_iou * 100}")
 
-        print(f'\n{"="*20}')
+        logger.print(f'\n{"="*20}')
 
         if configs["log_zone_metrics"]:
-            print(f'\n{"="*20}\n')
-            print("Metrics for climatic zone 1")
-            print("Number of samples for climatic zone 1 = ",
-                  samples_per_clzone[1])
-            print(f'\n{"="*20}')
-            print(
+            logger.print(f'\n{"="*20}\n')
+            logger.print("Metrics for climatic zone 1")
+            logger.print("Number of samples for climatic zone 1 = ",
+                         samples_per_clzone[1])
+            logger.print(f'\n{"="*20}')
+            logger.print(
                 f"{settype} Accuracy ({CLASS_LABELS[0]}): {100 * acc_clz1[0].item()}")
-            print(
+            logger.print(
                 f"{settype} Accuracy ({CLASS_LABELS[1]}): {100 * acc_clz1[1].item()}")
-            print(
+            logger.print(
                 f"{settype} Accuracy ({CLASS_LABELS[2]}): {100 * acc_clz1[2].item()}")
-            print(
+            logger.print(
                 f"{settype} F-Score ({CLASS_LABELS[0]}): {100 * score_clz1[0].item()}"
             )
-            print(
+            logger.print(
                 f"{settype} F-Score ({CLASS_LABELS[1]}): {100 * score_clz1[1].item()}"
             )
-            print(
+            logger.print(
                 f"{settype} F-Score ({CLASS_LABELS[2]}): {100 * score_clz1[2].item()}"
             )
-            print(
+            logger.print(
                 f"{settype} Precision ({CLASS_LABELS[0]}): {100 * prec_clz1[0].item()}"
             )
-            print(
+            logger.print(
                 f"{settype} Precision ({CLASS_LABELS[1]}): {100 * prec_clz1[1].item()}"
             )
-            print(
+            logger.print(
                 f"{settype} Precision ({CLASS_LABELS[2]}): {100 * prec_clz1[2].item()}"
             )
-            print(
+            logger.print(
                 f"{settype} Recall ({CLASS_LABELS[0]}): {100 * rec_clz1[0].item()}")
-            print(
+            logger.print(
                 f"{settype} Recall ({CLASS_LABELS[1]}): {100 * rec_clz1[1].item()}")
-            print(
+            logger.print(
                 f"{settype} Recall ({CLASS_LABELS[2]}): {100 * rec_clz1[2].item()}")
-            print(
+            logger.print(
                 f"{settype} IoU ({CLASS_LABELS[0]}): {100 * ious_clz1[0].item()}")
-            print(
+            logger.print(
                 f"{settype} IoU ({CLASS_LABELS[1]}): {100 * ious_clz1[1].item()}")
-            print(
+            logger.print(
                 f"{settype} IoU ({CLASS_LABELS[2]}): {100 * ious_clz1[2].item()}")
-            print(f"{settype} MeanIoU: {mean_iou_clz1 * 100}")
+            logger.print(f"{settype} MeanIoU: {mean_iou_clz1 * 100}")
 
-            print(f'\n{"="*20}')
+            logger.print(f'\n{"="*20}')
 
-            print(f'\n{"="*20}\n')
-            print("Metrics for climatic zone 2")
-            print("Number of samples for climatic zone 2 = ",
-                  samples_per_clzone[2])
+            logger.print(f'\n{"="*20}\n')
+            logger.print("Metrics for climatic zone 2")
+            logger.print("Number of samples for climatic zone 2 = ",
+                         samples_per_clzone[2])
 
-            print(f'\n{"="*20}')
-            print(
+            logger.print(f'\n{"="*20}')
+            logger.print(
                 f"{settype} Accuracy ({CLASS_LABELS[0]}): {100 * acc_clz2[0].item()}")
-            print(
+            logger.print(
                 f"{settype} Accuracy ({CLASS_LABELS[1]}): {100 * acc_clz2[1].item()}")
-            print(
+            logger.print(
                 f"{settype} Accuracy ({CLASS_LABELS[2]}): {100 * acc_clz2[2].item()}")
-            print(
+            logger.print(
                 f"{settype} F-Score ({CLASS_LABELS[0]}): {100 * score_clz2[0].item()}"
             )
-            print(
+            logger.print(
                 f"{settype} F-Score ({CLASS_LABELS[1]}): {100 * score_clz2[1].item()}"
             )
-            print(
+            logger.print(
                 f"{settype} F-Score ({CLASS_LABELS[2]}): {100 * score_clz2[2].item()}"
             )
-            print(
+            logger.print(
                 f"{settype} Precision ({CLASS_LABELS[0]}): {100 * prec_clz2[0].item()}"
             )
-            print(
+            logger.print(
                 f"{settype} Precision ({CLASS_LABELS[1]}): {100 * prec_clz2[1].item()}"
             )
-            print(
+            logger.print(
                 f"{settype} Precision ({CLASS_LABELS[2]}): {100 * prec_clz2[2].item()}"
             )
-            print(
+            logger.print(
                 f"{settype} Recall ({CLASS_LABELS[0]}): {100 * rec_clz2[0].item()}")
-            print(
+            logger.print(
                 f"{settype} Recall ({CLASS_LABELS[1]}): {100 * rec_clz2[1].item()}")
-            print(
+            logger.print(
                 f"{settype} Recall ({CLASS_LABELS[2]}): {100 * rec_clz2[2].item()}")
-            print(
+            logger.print(
                 f"{settype} IoU ({CLASS_LABELS[0]}): {100 * ious_clz2[0].item()}")
-            print(
+            logger.print(
                 f"{settype} IoU ({CLASS_LABELS[1]}): {100 * ious_clz2[1].item()}")
-            print(
+            logger.print(
                 f"{settype} IoU ({CLASS_LABELS[2]}): {100 * ious_clz2[2].item()}")
-            print(f"{settype} MeanIoU: {mean_iou_clz2 * 100}")
+            logger.print(f"{settype} MeanIoU: {mean_iou_clz2 * 100}")
 
-            print(f'\n{"="*20}')
+            logger.print(f'\n{"="*20}')
 
-            print(f'\n{"="*20}\n')
-            print("Metrics for climatic zone 3")
-            print("Number of samples for climatic zone 3 = ",
-                  samples_per_clzone[3])
+            logger.print(f'\n{"="*20}\n')
+            logger.print("Metrics for climatic zone 3")
+            logger.print("Number of samples for climatic zone 3 = ",
+                         samples_per_clzone[3])
 
-            print(f'\n{"="*20}')
-            print(
+            logger.print(f'\n{"="*20}')
+            logger.print(
                 f"{settype} Accuracy ({CLASS_LABELS[0]}): {100 * acc_clz3[0].item()}")
-            print(
+            logger.print(
                 f"{settype} Accuracy ({CLASS_LABELS[1]}): {100 * acc_clz3[1].item()}")
-            print(
+            logger.print(
                 f"{settype} Accuracy ({CLASS_LABELS[2]}): {100 * acc_clz3[2].item()}")
-            print(
+            logger.print(
                 f"{settype} F-Score ({CLASS_LABELS[0]}): {100 * score_clz3[0].item()}"
             )
-            print(
+            logger.print(
                 f"{settype} F-Score ({CLASS_LABELS[1]}): {100 * score_clz3[1].item()}"
             )
-            print(
+            logger.print(
                 f"{settype} F-Score ({CLASS_LABELS[2]}): {100 * score_clz3[2].item()}"
             )
-            print(
+            logger.print(
                 f"{settype} Precision ({CLASS_LABELS[0]}): {100 * prec_clz3[0].item()}"
             )
-            print(
+            logger.print(
                 f"{settype} Precision ({CLASS_LABELS[1]}): {100 * prec_clz3[1].item()}"
             )
-            print(
+            logger.print(
                 f"{settype} Precision ({CLASS_LABELS[2]}): {100 * prec_clz3[2].item()}"
             )
-            print(
+            logger.print(
                 f"{settype} Recall ({CLASS_LABELS[0]}): {100 * rec_clz3[0].item()}")
-            print(
+            logger.print(
                 f"{settype} Recall ({CLASS_LABELS[1]}): {100 * rec_clz3[1].item()}")
-            print(
+            logger.print(
                 f"{settype} Recall ({CLASS_LABELS[2]}): {100 * rec_clz3[2].item()}")
-            print(
+            logger.print(
                 f"{settype} IoU ({CLASS_LABELS[0]}): {100 * ious_clz3[0].item()}")
-            print(
+            logger.print(
                 f"{settype} IoU ({CLASS_LABELS[1]}): {100 * ious_clz3[1].item()}")
-            print(
+            logger.print(
                 f"{settype} IoU ({CLASS_LABELS[2]}): {100 * ious_clz3[2].item()}")
-            print(f"{settype} MeanIoU: {mean_iou_clz3 * 100}")
+            logger.print(f"{settype} MeanIoU: {mean_iou_clz3 * 100}")
 
-            print(f'\n{"="*20}')
+            logger.print(f'\n{"="*20}')
 
         if configs["log_AOI_metrics"]:
             for activ_i, activ_i_metrics_list in activ_i_metrics.items():
-                print(f'\n{"="*20}\n')
-                print(f"Metrics for AOI {activ_i}")
-                print(f'\n{"="*20}')
-                print(
+                logger.print(f'\n{"="*20}\n')
+                logger.print(f"Metrics for AOI {activ_i}")
+                logger.print(f'\n{"="*20}')
+                logger.print(
                     f'{settype} AOI {activ_i} Accuracy ({CLASS_LABELS[0]}): {100 * activ_i_metrics_list["accuracy"][0].item()}'
                 )
-                print(
+                logger.print(
                     f'{settype} AOI {activ_i} Accuracy ({CLASS_LABELS[1]}): {100 * activ_i_metrics_list["accuracy"][1].item()}'
                 )
-                print(
+                logger.print(
                     f'{settype} AOI {activ_i} Accuracy ({CLASS_LABELS[2]}): {100 * activ_i_metrics_list["accuracy"][2].item()}'
                 )
-                print(
+                logger.print(
                     f'{settype} AOI {activ_i} F-Score ({CLASS_LABELS[0]}): {100 * activ_i_metrics_list["fscore"][0].item()}'
                 )
-                print(
+                logger.print(
                     f'{settype} AOI {activ_i} F-Score ({CLASS_LABELS[1]}): {100 * activ_i_metrics_list["fscore"][1].item()}'
                 )
-                print(
+                logger.print(
                     f'{settype} AOI {activ_i} F-Score ({CLASS_LABELS[2]}): {100 * activ_i_metrics_list["fscore"][2].item()}'
                 )
-                print(
+                logger.print(
                     f'{settype} AOI {activ_i} Precision ({CLASS_LABELS[0]}): {100 * activ_i_metrics_list["precision"][0].item()}'
                 )
-                print(
+                logger.print(
                     f'{settype} AOI {activ_i} Precision ({CLASS_LABELS[1]}): {100 * activ_i_metrics_list["precision"][1].item()}'
                 )
-                print(
+                logger.print(
                     f'{settype} AOI {activ_i} Precision ({CLASS_LABELS[2]}): {100 * activ_i_metrics_list["precision"][2].item()}'
                 )
-                print(
+                logger.print(
                     f'{settype} AOI {activ_i} Recall ({CLASS_LABELS[0]}): {100 * activ_i_metrics_list["recall"][0].item()}'
                 )
-                print(
+                logger.print(
                     f'{settype} AOI {activ_i} Recall ({CLASS_LABELS[1]}): {100 * activ_i_metrics_list["recall"][1].item()}'
                 )
-                print(
+                logger.print(
                     f'{settype} AOI {activ_i} Recall ({CLASS_LABELS[2]}): {100 * activ_i_metrics_list["recall"][2].item()}'
                 )
-                print(
+                logger.print(
                     f'{settype} AOI {activ_i} IoU ({CLASS_LABELS[0]}): {100 * activ_i_metrics_list["iou"][0].item()}'
                 )
-                print(
+                logger.print(
                     f'{settype} AOI {activ_i} IoU ({CLASS_LABELS[1]}): {100 * activ_i_metrics_list["iou"][1].item()}'
                 )
-                print(
+                logger.print(
                     f'{settype} AOI {activ_i} IoU ({CLASS_LABELS[2]}): {100 * activ_i_metrics_list["iou"][2].item()}'
                 )
-                print(
+                logger.print(
                     f'{settype} AOI {activ_i} MeanIoU: {activ_i_metrics_list["iou"][:3].mean() * 100}'
                 )
 
-                print(f'\n{"="*20}')
+                logger.print(f'\n{"="*20}')
 
     elif configs["wandb_activate"]:
         log_dict = {
@@ -871,7 +886,7 @@ def eval_semantic_segmentation(
             f"{settype} MeanIoU": mean_iou * 100,
         }
         if configs["evaluate_water"]:
-            print("Updating onlywater")
+            logger.print("Updating onlywater")
 
             log_dict.update(
                 {
