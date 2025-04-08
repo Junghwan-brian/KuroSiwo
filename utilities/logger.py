@@ -20,19 +20,7 @@ class FileLogger:
             self.logger.addHandler(file_handler)
 
     def log(self, message):
-        if self.log_level == 'info':
-            self.logger.info(message)
-        elif self.log_level == 'debug':
-            self.logger.debug(message)
-        elif self.log_level == 'warning':
-            self.logger.warning(message)
-        elif self.log_level == 'error':
-            self.logger.error(message)
-        elif self.log_level == 'critical':
-            self.logger.critical(message)
-        else:
-            raise ValueError(
-                f"Unsupported log self.log_level: {self.log_level}")
+        self.logger.info(message)
 
     def print(self, message):
         self.log(message)

@@ -32,7 +32,7 @@ def train_contrastive_semantic_segmentation(
     )
     global logger
     logger = FileLogger(configs['checkpoint_path'] + '/train.log')
-    logger.info("Training started")
+    logger.log("Training started")
 
     num_classes = len(CLASS_LABELS) - 1
     sample_anchor_per_class = 10
