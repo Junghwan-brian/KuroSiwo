@@ -222,12 +222,12 @@ def train_semantic_segmentation(
         )
 
         if miou > best_val:
-            logger.print("Epoch: ", epoch)
-            logger.print("New best validation mIOU: ", miou)
-            logger.print(
-                "Saving model to: ",
-                configs["checkpoint_path"] + "/" + "best_segmentation.pt",
-            )
+            logger.print(f"Epoch: {epoch}")
+            logger.print(f"New best validation mIOU: {miou}")
+            # logger.print(
+            #     "Saving model to: ",
+            #     configs["checkpoint_path"] + "/" + "best_segmentation.pt",
+            # )
             best_val = miou
             best_stats["miou"] = best_val
             best_stats["epoch"] = epoch
@@ -719,8 +719,8 @@ def eval_semantic_segmentation(
 
             logger.print(f'\n{"="*20}\n')
             logger.print("Metrics for climatic zone 2")
-            logger.print("Number of samples for climatic zone 2 = ",
-                         samples_per_clzone[2])
+            logger.print(f"Number of samples for climatic zone 2 = {samples_per_clzone[2]}"
+                         )
 
             logger.print(f'\n{"="*20}')
             logger.print(
@@ -765,8 +765,8 @@ def eval_semantic_segmentation(
 
             logger.print(f'\n{"="*20}\n')
             logger.print("Metrics for climatic zone 3")
-            logger.print("Number of samples for climatic zone 3 = ",
-                         samples_per_clzone[3])
+            logger.print(
+                f"Number of samples for climatic zone 3 = {samples_per_clzone[3]}")
 
             logger.print(f'\n{"="*20}')
             logger.print(
