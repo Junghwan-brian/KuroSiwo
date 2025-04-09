@@ -22,6 +22,7 @@ parser.add_argument("--method", default=None)
 parser.add_argument("--task", default=None)
 parser.add_argument("--gpu", type=int, default=None)
 parser.add_argument("--backbone", default=None)
+parser.add_argument("--loss_function", default=None)
 parser.add_argument("--dem", type=int, default=None)
 parser.add_argument("--slope", type=int, default=None)
 parser.add_argument("--batch_size", default=None)
@@ -64,6 +65,9 @@ if __name__ == "__main__":
         configs = update_config(configs, None)
     else:
         configs = update_config(configs, args)
+
+    if args.loss_function is not None:
+        configs["loss_function"] = args.loss_function
 
     checkpoint_path = create_checkpoint_directory(configs, model_configs)
 
