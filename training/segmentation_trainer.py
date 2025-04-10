@@ -28,6 +28,16 @@ def train_semantic_segmentation(
     lr_scheduler = init_lr_scheduler(
         optimizer, configs, model_configs, steps=len(train_loader)
     )
+    start_epoch = 0
+    if configs['resume_checkpoint']:
+        checkpoint = torch.load(
+            configs["checkpoint_path"]+"/best_segmentation.pt", map_location=configs['device'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        lr_scheduler.load_state_dict(checkpoint['lr_scheduler_state_dict'])
+        start_epoch = checkpoint['epoch'] + 1
+        best_val = checkpoint['best_val']
+        best_stats = checkpoint['best_stats']
+        logger.log(f"Resumed training from epoch {start_epoch}")
     global logger
     logger = FileLogger(configs['checkpoint_path'] + '/train.log')
     logger.log("Training started")
@@ -40,7 +50,7 @@ def train_semantic_segmentation(
         # Creates a GradScaler once at the beginning of training.
         scaler = torch.cuda.amp.GradScaler()
 
-    for epoch in range(configs["epochs"]):
+    for epoch in range(start_epoch, configs["epochs"]):
         model.train()
 
         train_loss = 0.0
@@ -231,8 +241,14 @@ def train_semantic_segmentation(
             best_val = miou
             best_stats["miou"] = best_val
             best_stats["epoch"] = epoch
-            torch.save(model, configs["checkpoint_path"] +
-                       "/" + "best_segmentation.pt")
+            torch.save({
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'lr_scheduler_state_dict': lr_scheduler.state_dict(),
+                'epoch': epoch,
+                'best_val': best_val,
+                'best_stats': best_stats
+            }, configs["checkpoint_path"] + "/" + "best_segmentation.pt")
 
 
 def eval_semantic_segmentation(

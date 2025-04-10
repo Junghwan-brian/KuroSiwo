@@ -145,8 +145,10 @@ if __name__ == "__main__":
                 "Loading model from: ",
                 configs["checkpoint_path"] + "/" + "best_segmentation.pt",
             )
-            model = torch.load(
+            checkpoint = torch.load(
                 configs["checkpoint_path"] + "/" + "best_segmentation.pt")
+            model.load_state_dict(checkpoint['model_state_dict'])
+
             test_acc, test_score, miou = eval_semantic_segmentation(
                 model,
                 test_loader,

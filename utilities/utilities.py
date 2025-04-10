@@ -326,7 +326,8 @@ def init_lr_scheduler(optimizer, configs, model_configs, model_name=None, steps=
 
     # Load checkpoint (if any)
     if configs["resume_checkpoint"]:
-        checkpoint = torch.load(configs["resume_checkpoint"])
+        checkpoint = torch.load(
+            configs["checkpoint_path"]+"/best_segmentation.pt")
         lr_scheduler.load_state_dict(checkpoint["lr_scheduler_state_dict"])
 
     return lr_scheduler

@@ -105,14 +105,14 @@ def initialize_segmentation_model(config, model_configs):
     if config["task"] == "diffusion-unsup":
         model = Unet(dim=64, dim_mults=(1, 2, 4, 8), channels=2)
 
-        diffusion = GaussianDiffusion(
+        model = GaussianDiffusion(
             model,
             channels=2,
             image_size=224,
             timesteps=1000,  # number of steps
             loss_type="l1",  # L1 or L2
         )
-        return diffusion
+        return model
     elif config["task"] == "contrastive":
         if config["method"].lower() == "unet":
             classes = config["num_classes"]
@@ -144,8 +144,6 @@ def initialize_segmentation_model(config, model_configs):
                     "num_classes"
                 ],  # model output channels (number of classes in your dataset)
             )
-
-        return model
 
     else:
         if config["method"].lower() == "unet":
@@ -203,7 +201,12 @@ def initialize_segmentation_model(config, model_configs):
                 param.requires_grad = not config["linear_eval"]
             model = FinetunerSegmentation(encoder=encoder, configs=config)
 
-        return model
+    if config['resume_checkpoint']:
+        checkpoint = torch.load(
+            config["checkpoint_path"]+"/best_segmentation.pt", map_location=config['device'])
+        model.load_state_dict(checkpoint["model_state_dict"])
+
+    return model
 
 
 def initialize_recurrent_model(configs, model_configs, phase="train"):
@@ -212,7 +215,8 @@ def initialize_recurrent_model(configs, model_configs, phase="train"):
                          num_classes=configs['num_classes'], inp_size=224, device=configs['device'])
 
     if configs["resume_checkpoint"]:
-        checkpoint = torch.load(configs["resume_checkpoint"])
+        checkpoint = torch.load(
+            configs["checkpoint_path"]+"/best_segmentation.pt")
         model.load_state_dict(checkpoint["model_state_dict"])
 
     print(model)
@@ -259,7 +263,7 @@ def initialize_cd_model(configs, model_configs, phase="train"):
 
     if configs["resume_checkpoint"]:
         checkpoint = torch.load(
-            configs["resume_checkpoint"], map_location=configs['device'])
+            configs["checkpoint_path"]+"/best_segmentation.pt", map_location=configs['device'])
         model.load_state_dict(checkpoint["model_state_dict"])
 
     print(model)

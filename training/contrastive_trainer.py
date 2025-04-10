@@ -30,6 +30,16 @@ def train_contrastive_semantic_segmentation(
     lr_scheduler = init_lr_scheduler(  # TODO SAM optimizer 추가 테스트.
         optimizer, configs, model_configs, steps=len(train_loader)
     )
+    start_epoch = 0
+    if configs['resume_checkpoint']:
+        checkpoint = torch.load(
+            configs["checkpoint_path"]+"/best_segmentation.pt", map_location=configs['device'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        lr_scheduler.load_state_dict(checkpoint['lr_scheduler_state_dict'])
+        start_epoch = checkpoint['epoch'] + 1
+        best_val = checkpoint['best_val']
+        best_stats = checkpoint['best_stats']
+        logger.log(f"Resumed training from epoch {start_epoch}")
     global logger
     logger = FileLogger(configs['checkpoint_path'] + '/train.log')
     logger.log("Training started")
@@ -44,7 +54,7 @@ def train_contrastive_semantic_segmentation(
         # Creates a GradScaler once at the beginning of training.
         scaler = torch.cuda.amp.GradScaler()
 
-    for epoch in range(configs["epochs"]):
+    for epoch in range(start_epoch, configs["epochs"]):
         model.train()
 
         for index, batch in tqdm(
@@ -163,70 +173,14 @@ def train_contrastive_semantic_segmentation(
             best_val = miou
             best_stats["miou"] = best_val
             best_stats["epoch"] = epoch
-            torch.save(model, configs["checkpoint_path"] +
-                       "/" + "best_segmentation.pt")
-
-
-def bane_sampling_single_image(
-    pred: torch.Tensor,  # [H, W], 예측 클래스(0~C-1)
-    gt: torch.Tensor,    # [H, W], 실제 클래스
-    num_classes: int = 3,
-    ratio_k: float = 0.5
-):
-    """
-    pred, gt는 단일 이미지를 가정 (within-image)
-    BANE: boundary 근처 오분류 픽셀을 negative로 선택
-
-    Returns:
-        negative_indices = dict: { class_id : Tensor of shape [K,2] (row,col) }
-        (K개의 (row,col) 픽셀 좌표)
-
-
-    Explanation:
-    ------------
-    1.	에러 마스크(error mask) 만들기
-    •	“클래스 c여야 하는 픽셀”인데 “모델이 c로 예측하지 않은” 곳을 에러로 봅니다.
-    •	예: \text{error_mask}(u,v) = 1 if (GT=c) and (Pred≠c), 그 외는 0
-    2.	에러 마스크에서 “경계와의 거리” 계산
-    •	distance_transform_edt(SciPy 함수)를 이용해, 에러 마스크가 1인 지점들(오분류된 영역) 각각이 “경계”로부터 얼마나 떨어져 있는지를 계산합니다.
-    •	“경계”란, 에러 마스크가 1에서 0으로 바뀌는 지점(즉 잘못 예측된 영역의 테두리)이라고 생각하면 됩니다.
-    3.	경계에 가까운 픽셀(작은 거리)을 골라냄
-    •	distance가 작을수록 경계와 가까운 픽셀이 됩니다.
-    •	BANE에서는 distance가 작은 픽셀들을 우선적으로 선택(예: 상위 K%만 선택)하여, “경계 부근의 하드 네거티브” 샘플로 삼습니다.
-
-    """
-    pred_np = pred.detach().cpu().long().numpy()
-    gt_np = gt.detach().cpu().long().numpy()
-
-    H, W = pred_np.shape
-    neg_indices = {}
-
-    for c in range(num_classes):
-        # 1) error mask: GT는 c지만 pred가 c가 아님
-        error_mask = (gt_np == c) & (pred_np != c)  # bool [H,W]
-
-        if not np.any(error_mask):
-            neg_indices[c] = torch.empty((0, 2), dtype=torch.long)
-            continue
-
-        # 2) distance transform (경계로부터의 거리)
-        #   -> boundary에 가까울수록 distance가 0 ~ small
-        dist_map = distance_transform_edt(~error_mask)  # [H,W] float
-
-        # 3) error_mask가 1인 픽셀들 중 distance가 작은 순으로 정렬
-        error_coords = np.stack(np.where(error_mask), axis=1)  # [N,2]
-        dist_vals = dist_map[error_mask]                    # [N]
-
-        N_err = len(error_coords)
-        kth = int(N_err * ratio_k)
-        kth = max(kth, 1)  # 최소 1픽셀 이상
-        sorted_idx = np.argsort(dist_vals)  # ascending
-        selected = sorted_idx[:kth]       # 상위 k% -> boundary 근처
-
-        coords_torch = torch.from_numpy(error_coords[selected]).long()
-        neg_indices[c] = coords_torch
-
-    return neg_indices
+            torch.save({
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'lr_scheduler_state_dict': lr_scheduler.state_dict(),
+                'epoch': epoch,
+                'best_val': best_val,
+                'best_stats': best_stats
+            }, configs["checkpoint_path"] + "/" + "best_segmentation.pt")
 
 
 def changed_contrastive_loss_region(
