@@ -4,11 +4,7 @@
 # Written by Ke Sun (sunk@mail.ustc.edu.cn)
 # ------------------------------------------------------------------------------
 
-from __future__ import absolute_import
 from configs.method.hrnet.hrnet_config import MODEL_CONFIGS
-from __future__ import division
-from __future__ import print_function
-
 import os
 import logging
 

@@ -425,9 +425,9 @@ def update_config(config, args=None):
 
     if config["weighted"] and config["track"] == "RandomEvents":
         config["class_weights"] = [
-            0.3715753140309927,
-            14.009780283125977,
-            8.20405370357821,
+            0.2,
+            0.4,
+            0.4,
         ]
     else:
         config["class_weights"] = [1.0, 1.0, 1.0]

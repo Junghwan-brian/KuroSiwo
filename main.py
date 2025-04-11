@@ -30,11 +30,25 @@ from utilities.utilities import *
 from warnings import filterwarnings
 filterwarnings("ignore")
 
+
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--method", default=None)
 parser.add_argument("--task", default=None)
 parser.add_argument("--gpu", type=int, default=None)
 parser.add_argument("--backbone", default=None)
+parser.add_argument("--weighted", default=False, type=str2bool)
+parser.add_argument("--pretrained", default=True, type=str2bool)
 parser.add_argument("--loss_function", default=None)
 parser.add_argument("--dem", type=int, default=None)
 parser.add_argument("--slope", type=int, default=None)
@@ -73,6 +87,15 @@ if __name__ == "__main__":
         )
         if args.backbone is not None:
             model_configs["backbone"] = args.backbone
+
+    if args.pretrained == True:
+        model_configs["pretrained"] = args.pretrained
+        model_configs["encoder_weights"] = 'imagenet'
+    else:
+        model_configs["pretrained"] = args.pretrained
+        model_configs["encoder_weights"] = None
+    if args.weighted is not None:
+        model_configs['weighted'] = args.weighted
 
     configs.update(model_configs)
 
