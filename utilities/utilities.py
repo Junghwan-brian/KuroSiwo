@@ -37,8 +37,11 @@ def create_checkpoint_directory(configs, model_configs):
                 base_path
                 + model_configs["architecture"]
                 + "/"
-                + model_configs["backbone"] + "_" +
-                str(model_configs["encoder_weights"])
+                + model_configs["backbone"]
+                + "_"
+                + str(model_configs["encoder_weights"])
+                + "_"
+                + str(model_configs["weighted"])
                 + "/"
                 + "-".join(configs["channels"])
                 + "_patches_"
@@ -57,8 +60,11 @@ def create_checkpoint_directory(configs, model_configs):
                 base_path
                 + model_configs["architecture"]
                 + "/"
-                + model_configs["backbone"] + "_" +
-                str(model_configs["encoder_weights"])
+                + model_configs["backbone"]
+                + "_"
+                + str(model_configs["encoder_weights"])
+                + "_"
+                + str(model_configs["weighted"])
                 + "/"
                 + "-".join(configs["channels"])
                 + "_patches_"

@@ -18,6 +18,9 @@ CLASS_LABELS = {0: "No water", 1: "Permanent Waters",
 def train_semantic_segmentation(
     model, train_loader, val_loader, test_loader, configs, model_configs
 ):
+    global logger
+    logger = FileLogger(configs['checkpoint_path'] + '/train.log')
+    logger.log("Training started")
 
     # Accuracy, loss, optimizer, lr scheduler
     accuracy, fscore, precision, recall, iou = initialize_metrics(configs)
@@ -38,9 +41,6 @@ def train_semantic_segmentation(
         best_val = checkpoint['best_val']
         best_stats = checkpoint['best_stats']
         logger.log(f"Resumed training from epoch {start_epoch}")
-    global logger
-    logger = FileLogger(configs['checkpoint_path'] + '/train.log')
-    logger.log("Training started")
 
     model.to(configs["device"])
     best_val = 0.0

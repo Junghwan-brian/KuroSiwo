@@ -18,7 +18,8 @@ def get_augmentations(config):
         elif k == "VerticalFlip":
             aug = A.augmentations.VerticalFlip(p=v["p"])
         elif k == "GaussianBlur":
-            aug = A.augmentations.GaussianBlur(sigma_limit=v["sigma_limit"], p=v["p"])
+            aug = A.augmentations.GaussianBlur(
+                sigma_limit=v["sigma_limit"], p=v["p"])
         elif k == "ElasticTransform":
             aug = A.augmentations.ElasticTransform(
                 alpha=v["alpha"],

@@ -22,6 +22,10 @@ from training.recurrent_trainer import (
     eval_recurrent_segmentation,
     train_recurrent_segmentation
 )
+from training.contrastive_trainer import (
+    train_contrastive_semantic_segmentation,
+    eval_contrastive_semantic_segmentation,
+)
 from utilities.utilities import *
 from warnings import filterwarnings
 filterwarnings("ignore")
@@ -193,3 +197,31 @@ if __name__ == "__main__":
         )
 
         print("Test Mean IOU: ", miou.item())
+    elif configs["task"] == "contrastive":
+        model = initialize_segmentation_model(configs, model_configs)
+        if not configs["test"]:
+            train_contrastive_semantic_segmentation(
+                model,
+                train_loader,
+                val_loader,
+                test_loader,
+                configs=configs,
+                model_configs=model_configs,
+            )
+
+        # Evaluate on Test Set
+        print(
+            "Loading model from: ",
+            configs["checkpoint_path"] + "/" + "best_segmentation.pt",
+        )
+        checkpoint = torch.load(
+            configs["checkpoint_path"] + "/" + "best_segmentation.pt")
+        model.load_state_dict(checkpoint['model_state_dict'])
+        test_acc, test_score, miou = eval_contrastive_semantic_segmentation(
+            model,
+            test_loader,
+            settype="Test",
+            configs=configs,
+            model_configs=model_configs,
+        )
+        print("Test Mean IOU: ", miou)

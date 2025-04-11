@@ -13,7 +13,7 @@ from segmentation_models_pytorch.encoders import get_encoder
 from segmentation_models_pytorch.base.hub_mixin import supports_config_loading
 from segmentation_models_pytorch.base import SegmentationHead
 import numpy as np
-from typing import Any, Optional, Union, Tuple, Callable
+from typing import Any, Optional, Union, Tuple, Dict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -64,7 +64,7 @@ class DualContrastDeepLabV3(SegmentationModel):
         activation: Optional[str] = None,
         upsampling: int = 4,
         aux_params: Optional[dict] = None,
-        **kwargs: dict[str, Any],
+        **kwargs: Dict[str, Any],
     ):
         super().__init__()
 
