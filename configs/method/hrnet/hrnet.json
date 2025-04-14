@@ -1,0 +1,11 @@
+{
+    "method": "hrnet",
+    "optimizer": "adam",
+    "learning_rate": 0.001,
+    "weight_decay": 0.0,
+    "lr_schedule": "cosine",
+    "architecture": "HRNet",
+    "backbone": "hrnet32",
+    "pretrained": true,
+    "encoder_weights": null //"imagenet"
+}

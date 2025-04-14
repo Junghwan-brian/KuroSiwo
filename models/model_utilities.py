@@ -18,7 +18,7 @@ from .snunet import SNUNet_ECAM
 from .convlstm import ConvLSTM
 from .hrnet import get_seg_model
 from .dual_contrast_unet import DualContrastUnet
-
+from .dual_contrast_hrnet import get_dual_contrast_seg_model
 from .dual_contrast_deeplab import DualContrastDeepLabV3
 
 
@@ -145,6 +145,10 @@ def initialize_segmentation_model(config, model_configs):
                     "num_classes"
                 ],  # model output channels (number of classes in your dataset)
             )
+        elif config["method"].lower() == "hrnet":
+            model = get_dual_contrast_seg_model(
+                backbone=model_configs['backbone'], num_classes=config['num_classes'],
+                in_channels=config['num_channels'], pretrained=model_configs['pretrained'])
 
     else:
         if config["method"].lower() == "unet":
@@ -200,7 +204,7 @@ def initialize_segmentation_model(config, model_configs):
         elif config["method"].lower() == "hrnet":
             model = get_seg_model(
                 backbone=model_configs['backbone'], num_classes=config['num_classes'],
-                in_channels=config['num_channels'])
+                in_channels=config['num_channels'], pretrained=model_configs['pretrained'])
 
         elif config["method"] == "finetune":
             encoder = torch.load(config["encoder"], map_location="cpu")

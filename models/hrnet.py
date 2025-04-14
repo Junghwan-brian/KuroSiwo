@@ -311,7 +311,7 @@ class HighResolutionNet(nn.Module):
         self.stage4, pre_stage_channels = self._make_stage(
             self.stage4_cfg, num_channels, multi_scale_output=True)
 
-        last_inp_channels = np.int(np.sum(pre_stage_channels))
+        last_inp_channels = np.int32(np.sum(pre_stage_channels))
 
         self.last_layer = nn.Sequential(
             nn.Conv2d(
@@ -412,8 +412,8 @@ class HighResolutionNet(nn.Module):
 
         return nn.Sequential(*modules), num_inchannels
 
-    def forward(self, x):
-        x = self.conv1(x)
+    def forward(self, inputs):
+        x = self.conv1(inputs)
         x = self.bn1(x)
         x = self.relu(x)
         x = self.conv2(x)
@@ -463,10 +463,11 @@ class HighResolutionNet(nn.Module):
         x = torch.cat([x[0], x1, x2, x3], 1)
 
         x = self.last_layer(x)
-
+        x = F.interpolate(x, size=inputs.size()[2:],
+                          mode='bilinear', align_corners=ALIGN_CORNERS)
         return x
 
-    def init_weights(self, pretrained='',):
+    def init_weights(self, backbone='32', pretrained=False):
         logger.info('=> init weights from normal distribution')
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -474,22 +475,23 @@ class HighResolutionNet(nn.Module):
             elif isinstance(m, BatchNorm2d_class):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
-        if os.path.isfile(pretrained):
-            pretrained_dict = torch.load(pretrained)
-            logger.info('=> loading pretrained model {}'.format(pretrained))
+        if pretrained:
+            path = f'ckpt/hrnetv2_w{backbone}_imagenet_pretrained.pth'
+            pretrained_dict = torch.load(path)
+            logger.info('=> loading pretrained model {}'.format(path))
             model_dict = self.state_dict()
             pretrained_dict = {k: v for k, v in pretrained_dict.items()
-                               if k in model_dict.keys()}
+                               if k in model_dict.keys() and model_dict[k].shape == v.shape}
             for k, _ in pretrained_dict.items():
                 logger.info(
-                    '=> loading {} pretrained model {}'.format(k, pretrained))
+                    '=> loading {} pretrained model {}'.format(k, path))
             model_dict.update(pretrained_dict)
             self.load_state_dict(model_dict)
 
 
-def get_seg_model(backbone='hrnet32', num_classes=3, in_channels=6, **kwargs):
+def get_seg_model(backbone='hrnet32', num_classes=3, in_channels=6, pretrained=True, **kwargs):
     model = HighResolutionNet(
         backbone=backbone, NUM_CLASSES=num_classes, in_channels=in_channels, **kwargs)
-    model.init_weights()
+    model.init_weights(backbone=backbone[-2:], pretrained=pretrained)
 
     return model

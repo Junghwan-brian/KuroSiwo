@@ -4,12 +4,7 @@
 # Written by Ke Sun (sunk@mail.ustc.edu.cn)
 # ------------------------------------------------------------------------------
 
-from __future__ import absolute_import
 from configs.method.hrnet.hrnet_config import MODEL_CONFIGS
-from __future__ import division
-from __future__ import print_function
-
-import os
 import logging
 
 import numpy as np
@@ -33,6 +28,22 @@ def conv3x3(in_planes, out_planes, stride=1):
 
 BatchNorm2d_class = BatchNorm2d = torch.nn.SyncBatchNorm
 relu_inplace = True
+
+
+class ProjectionHead(nn.Module):
+    def __init__(self, in_channels):
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_channels, 128, kernel_size=1)
+        self.relu = nn.ReLU(inplace=True)
+        self.conv2 = nn.Conv2d(128, 64, kernel_size=1)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.relu(x)
+        x = self.conv2(x)
+        # L2 정규화 (channel 차원, dim=1)
+        x = F.normalize(x, p=2, dim=1)
+        return x
 
 
 class BasicBlock(nn.Module):
@@ -263,7 +274,7 @@ blocks_dict = {
 
 class HighResolutionNet(nn.Module):
 
-    def __init__(self, backbone='hrnet32', NUM_CLASSES=3, in_channels=6, **kwargs):
+    def __init__(self, backbone='hrnet32', NUM_CLASSES=3, in_channels=2, **kwargs):
         global ALIGN_CORNERS
         extra = MODEL_CONFIGS[backbone]
         super(HighResolutionNet, self).__init__()
@@ -315,11 +326,12 @@ class HighResolutionNet(nn.Module):
         self.stage4, pre_stage_channels = self._make_stage(
             self.stage4_cfg, num_channels, multi_scale_output=True)
 
-        last_inp_channels = np.int(np.sum(pre_stage_channels))
+        last_inp_channels = np.int32(np.sum(pre_stage_channels))
+        self.contrast_proj = ProjectionHead(last_inp_channels)
 
         self.last_layer = nn.Sequential(
             nn.Conv2d(
-                in_channels=last_inp_channels,
+                in_channels=last_inp_channels*3,
                 out_channels=last_inp_channels,
                 kernel_size=1,
                 stride=1,
@@ -416,7 +428,33 @@ class HighResolutionNet(nn.Module):
 
         return nn.Sequential(*modules), num_inchannels
 
-    def forward(self, x):
+    def forward(self, pre_event1: torch.Tensor, pre_event2: torch.Tensor, post_event: torch.Tensor, eval_mode=False):
+        pre_vec1 = self.encoder_forward(pre_event1)
+        pre_vec2 = self.encoder_forward(pre_event2)
+        post_vec = self.encoder_forward(post_event)
+        # 각 시점의 contrastive feature를 projection head에 통과시킴
+        feat_pre1_con = self.contrast_proj(pre_vec1)
+        feat_pre2_con = self.contrast_proj(pre_vec2)
+        feat_post_con = self.contrast_proj(post_vec)
+        # 각 시점의 contrastive feature를 concat
+        x = torch.cat([pre_vec1, pre_vec2, post_vec], dim=1)
+        # segmentation head
+        x = self.last_layer(x)
+        x = F.interpolate(x, size=pre_event1.size()[2:],
+                          mode='bilinear', align_corners=ALIGN_CORNERS)
+        if eval_mode:
+            return x
+        # upsample contrastive features to match label resolution (input H, W)
+        feat_pre1_con = F.interpolate(
+            feat_pre1_con, size=pre_event1.shape[2:], mode='bilinear', align_corners=True)
+        feat_pre2_con = F.interpolate(
+            feat_pre2_con, size=pre_event1.shape[2:], mode='bilinear', align_corners=True)
+        feat_post_con = F.interpolate(
+            feat_post_con, size=pre_event1.shape[2:], mode='bilinear', align_corners=True)
+
+        return x, feat_pre1_con, feat_pre2_con, feat_post_con
+
+    def encoder_forward(self, x):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -465,12 +503,9 @@ class HighResolutionNet(nn.Module):
                            mode='bilinear', align_corners=ALIGN_CORNERS)
 
         x = torch.cat([x[0], x1, x2, x3], 1)
-
-        x = self.last_layer(x)
-
         return x
 
-    def init_weights(self, pretrained='',):
+    def init_weights(self, backbone='32', pretrained=False):
         logger.info('=> init weights from normal distribution')
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -478,23 +513,23 @@ class HighResolutionNet(nn.Module):
             elif isinstance(m, BatchNorm2d_class):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
-        if os.path.isfile(pretrained):
-            pretrained_dict = torch.load(pretrained)
-            logger.info('=> loading pretrained model {}'.format(pretrained))
+        if pretrained:
+            path = f'ckpt/hrnetv2_w{backbone}_imagenet_pretrained.pth'
+            pretrained_dict = torch.load(path)
+            logger.info('=> loading pretrained model {}'.format(path))
             model_dict = self.state_dict()
             pretrained_dict = {k: v for k, v in pretrained_dict.items()
-                               if k in model_dict.keys()}
+                               if k in model_dict.keys() and model_dict[k].shape == v.shape}
             for k, _ in pretrained_dict.items():
                 logger.info(
-                    '=> loading {} pretrained model {}'.format(k, pretrained))
+                    '=> loading {} pretrained model {}'.format(k, path))
             model_dict.update(pretrained_dict)
             self.load_state_dict(model_dict)
 
 
-def get_seg_model(backbone='hrnet32', num_classes=3, in_channels=6, **kwargs):
+def get_dual_contrast_seg_model(backbone='hrnet32', num_classes=3, in_channels=6, pretrained=True, **kwargs):
     model = HighResolutionNet(
         backbone=backbone, NUM_CLASSES=num_classes, in_channels=in_channels, **kwargs)
-    model.init_weights()
+    model.init_weights(backbone=backbone[-2:], pretrained=pretrained)
 
     return model
-# TODO model 구조 변경.

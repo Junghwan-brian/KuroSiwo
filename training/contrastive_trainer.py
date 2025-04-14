@@ -26,7 +26,6 @@ def train_contrastive_semantic_segmentation(
 
     # Accuracy, loss, optimizer, lr scheduler
     accuracy, fscore, precision, recall, iou = initialize_metrics(configs)
-    # TODO 단순 CrossEntropyLoss 말고 ce+dice 도 테스트.
     criterion = create_loss(configs, mode="train")
     optimizer = torch.optim.Adam(
         model.parameters(), lr=model_configs["learning_rate"])
