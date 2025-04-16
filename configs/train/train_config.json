@@ -6,7 +6,7 @@
     "print_frequency": 10,
     "on_screen_prints": true,
     "train_save_checkpoint_freq": 1,
-    "resume_checkpoint": false,
+    "resume_checkpoint": true,
     "loss_function": "cross_entropy",
     "oversampling":false,
     "evaluate_water":true

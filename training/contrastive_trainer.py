@@ -7,6 +7,7 @@ import kornia
 import torch
 import torch.nn.functional as F
 import wandb
+import os
 from tqdm import tqdm
 
 from models.model_utilities import *
@@ -34,7 +35,7 @@ def train_contrastive_semantic_segmentation(
         optimizer, configs, model_configs, steps=len(train_loader)
     )
     start_epoch = 0
-    if configs['resume_checkpoint']:
+    if configs['resume_checkpoint'] and os.path.exists(configs["checkpoint_path"]+"/best_segmentation.pt"):
         checkpoint = torch.load(
             configs["checkpoint_path"]+"/best_segmentation.pt", map_location=configs['device'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])

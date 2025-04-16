@@ -33,7 +33,7 @@ def train_semantic_segmentation(
         optimizer, configs, model_configs, steps=len(train_loader)
     )
     start_epoch = 0
-    if configs['resume_checkpoint']:
+    if configs['resume_checkpoint'] and os.path.exists(configs["checkpoint_path"]+"/best_segmentation.pt"):
         checkpoint = torch.load(
             configs["checkpoint_path"]+"/best_segmentation.pt", map_location=configs['device'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])

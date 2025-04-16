@@ -20,6 +20,7 @@ from .hrnet import get_seg_model
 from .dual_contrast_unet import DualContrastUnet
 from .dual_contrast_hrnet import get_dual_contrast_seg_model
 from .dual_contrast_deeplab import DualContrastDeepLabV3
+import os
 
 
 class Decoder(nn.Module):
@@ -212,7 +213,8 @@ def initialize_segmentation_model(config, model_configs):
                 param.requires_grad = not config["linear_eval"]
             model = FinetunerSegmentation(encoder=encoder, configs=config)
 
-    if config['resume_checkpoint']:
+    if config['resume_checkpoint'] and os.path.exists(config["checkpoint_path"]+"/best_segmentation.pt"):
+
         checkpoint = torch.load(
             config["checkpoint_path"]+"/best_segmentation.pt", map_location=config['device'])
         model.load_state_dict(checkpoint["model_state_dict"])
@@ -225,7 +227,8 @@ def initialize_recurrent_model(configs, model_configs, phase="train"):
         model = ConvLSTM(in_channels=configs['num_channels'],
                          num_classes=configs['num_classes'], inp_size=224, device=configs['device'])
 
-    if configs["resume_checkpoint"]:
+    if configs['resume_checkpoint'] and os.path.exists(configs["checkpoint_path"]+"/best_segmentation.pt"):
+
         checkpoint = torch.load(
             configs["checkpoint_path"]+"/best_segmentation.pt")
         model.load_state_dict(checkpoint["model_state_dict"])
@@ -272,7 +275,8 @@ def initialize_cd_model(configs, model_configs, phase="train"):
 
     model = model.to(configs['device'])
 
-    if configs["resume_checkpoint"]:
+    if configs['resume_checkpoint'] and os.path.exists(configs["checkpoint_path"]+"/best_segmentation.pt"):
+
         checkpoint = torch.load(
             configs["checkpoint_path"]+"/best_segmentation.pt", map_location=configs['device'])
         model.load_state_dict(checkpoint["model_state_dict"])
