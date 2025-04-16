@@ -12,10 +12,9 @@ import pandas as pd
 import torch
 import torchvision
 from torchio.transforms import RescaleIntensity
-from torchvision import transforms
 from tqdm import tqdm
+import h5py
 
-import utilities.utilities as utilities
 from utilities import augmentations
 
 
@@ -669,81 +668,20 @@ class Dataset(torch.utils.data.Dataset):
 
         path = sample["path"]
         path = os.path.join(self.root_path, path)
-        files = os.listdir(path)
         clz = sample["clz"]
         activation = sample["activation"]
         mask = None
 
-        for file in files:
-            current_path = str(os.path.join(path, file))
-            if "xml" not in file:
-                if file.startswith("MK0_MLU") and (sample["type"] is None):
-                    # Get mask of flooded/perm water pixels
-                    mask = cv.imread(current_path, cv.IMREAD_ANYDEPTH)
-                elif file.startswith("MK0_MNA") and (sample["type"] is None):
-                    # Get mask of valid pixels
-                    valid_mask = cv.imread(current_path, cv.IMREAD_ANYDEPTH)
-                elif file.startswith("MS1_IVV") and (
-                    sample["type"] not in ["pre1", "pre2"]
-                ):
-                    # Get master ivv channel
-                    flood_vv = cv.imread(current_path, cv.IMREAD_ANYDEPTH)
-                    if self.configs["uint8"]:
-                        flood_vv /= flood_vv.max()
-                        flood_vv *= 255
-                        flood_vv = flood_vv.astype(np.uint8)
-                    if flood_vv is None:
-                        print(current_path)
-
-                elif file.startswith("MS1_IVH") and (
-                    sample["type"] not in ["pre1", "pre2"]
-                ):
-                    # Get master ivh channel
-                    flood_vh = cv.imread(current_path, cv.IMREAD_ANYDEPTH)
-                    if self.configs["uint8"]:
-                        flood_vh /= flood_vh.max()
-                        flood_vh *= 255
-                        flood_vh = flood_vh.astype(np.uint8)
-
-                elif file.startswith("SL1_IVV") and (
-                    sample["type"] not in ["flood", "pre2"]
-                ):
-                    # Get slave1 vv channel
-                    sec1_vv = cv.imread(current_path, cv.IMREAD_ANYDEPTH)
-                    if self.configs["uint8"]:
-                        sec1_vv /= sec1_vv.max()
-                        sec1_vv *= 255
-                        sec1_vv = sec1_vv.astype(np.uint8)
-
-                elif file.startswith("SL1_IVH") and (
-                    sample["type"] not in ["flood", "pre2"]
-                ):
-                    # Get sl1 vh channel
-                    sec1_vh = cv.imread(current_path, cv.IMREAD_ANYDEPTH)
-                    if self.configs["uint8"]:
-                        sec1_vh /= sec1_vh.max()
-                        sec1_vh *= 255
-                        sec1_vh = sec1_vh.astype(np.uint8)
-
-                elif file.startswith("SL2_IVV") and (
-                    sample["type"] not in ["flood", "pre1"]
-                ):
-                    # Get sl2 vv channel
-                    sec2_vv = cv.imread(current_path, cv.IMREAD_ANYDEPTH)
-                    if self.configs["uint8"]:
-                        sec2_vv /= sec2_vv.max()
-                        sec2_vv *= 255
-                        sec2_vv = sec2_vv.astype(np.uint8)
-
-                elif file.startswith("SL2_IVH") and (
-                    sample["type"] not in ["flood", "pre1"]
-                ):
-                    # Get sl2 vh channel
-                    sec2_vh = cv.imread(current_path, cv.IMREAD_ANYDEPTH)
-                    if self.configs["uint8"]:
-                        sec2_vh /= sec2_vh.max()
-                        sec2_vh *= 255
-                        sec2_vh = sec2_vh.astype(np.uint8)
+        # HDF5 파일로부터 데이터 읽어오기 (슬라이싱 지원)
+        with h5py.File(os.path.join(path, 'combined_data.h5'), 'r') as f:
+            mask = f['mask'][:]
+            valid_mask = f['valid_mask'][:]
+            flood_vv = f['flood_vv'][:]
+            flood_vh = f['flood_vh'][:]
+            sec1_vv = f['sec1_vv'][:]
+            sec1_vh = f['sec1_vh'][:]
+            sec2_vv = f['sec2_vv'][:]
+            sec2_vh = f['sec2_vh'][:]
 
         # Concat channels
         if sample["type"] not in ("pre1", "pre2"):

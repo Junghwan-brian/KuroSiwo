@@ -22,6 +22,7 @@ def train_semantic_segmentation(
     logger = FileLogger(configs['checkpoint_path'] + '/train.log')
     logger.log("Training started")
 
+    model.to(configs["device"])
     # Accuracy, loss, optimizer, lr scheduler
     accuracy, fscore, precision, recall, iou = initialize_metrics(configs)
 
@@ -42,7 +43,6 @@ def train_semantic_segmentation(
         best_stats = checkpoint['best_stats']
         logger.log(f"Resumed training from epoch {start_epoch}")
 
-    model.to(configs["device"])
     best_val = 0.0
     best_stats = {}
 

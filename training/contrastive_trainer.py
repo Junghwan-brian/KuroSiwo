@@ -24,6 +24,7 @@ def train_contrastive_semantic_segmentation(
     logger = FileLogger(configs['checkpoint_path'] + '/train.log')
     logger.log("Training started")
 
+    model.to(configs["device"])
     # Accuracy, loss, optimizer, lr scheduler
     accuracy, fscore, precision, recall, iou = initialize_metrics(configs)
     criterion = create_loss(configs, mode="train")
@@ -45,7 +46,6 @@ def train_contrastive_semantic_segmentation(
 
     num_classes = len(CLASS_LABELS) - 1
 
-    model.to(configs["device"])
     best_val = 0.0
     best_stats = {}
 
